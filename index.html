@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+
+  <meta charset="UTF-8">
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  >
+
+  <title>
+    Audit System - Login
+  </title>
+
+  <!-- ======================
+  GOOGLE FONTS
+  ====================== -->
+
+  <link
+    rel="preconnect"
+    href="https://fonts.googleapis.com"
+  >
+
+  <link
+    rel="preconnect"
+    href="https://fonts.gstatic.com"
+    crossorigin
+  >
+
+  <link
+    href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+    rel="stylesheet"
+  >
+
+  <!-- ======================
+  CSS
+  ====================== -->
+
+  <link
+    rel="stylesheet"
+    href="css/login.css"
+  >
+  <link
+    rel="stylesheet"
+    href="css/notificaciones-premium.css"
+  >
+
+</head>
+
+<!-- ======================
+BODY
+====================== -->
+
+<body class="login-body">
+
+  <!-- ======================
+  LOGIN CONTAINER
+  ====================== -->
+
+  <div class="login-container">
+
+    <!-- ======================
+    LEFT
+    ====================== -->
+
+    <div class="login-left">
+
+      <img
+        src="img/logo-electro.png.png"
+        class="login-logo"
+        alt="Logo Electro Ingeniería"
+      >
+
+      <h1>
+        Bienvenido al Sistema
+        de Auditoría y Gestión
+      </h1>
+
+      <p>
+        Plataforma profesional para el control
+        de inventarios, auditorías, recepción,
+        validación y gestión logística empresarial.
+      </p>
+
+    </div>
+
+    <!-- ======================
+    RIGHT
+    ====================== -->
+
+    <div class="login-right">
+
+      <!-- ======================
+      CARD LOGIN
+      ====================== -->
+
+      <div class="login-card">
+
+        <h2>
+          Iniciar Sesión
+        </h2>
+
+        <span>
+          Ingrese sus credenciales
+          para acceder al sistema
+        </span>
+
+        <!-- ======================
+        FORM
+        ====================== -->
+
+        <form id="loginForm">
+
+          <!-- ======================
+          USUARIO
+          ====================== -->
+
+          <div class="input-group">
+
+            <label>
+              Usuario
+            </label>
+
+            <input
+              type="text"
+              id="usuario"
+              placeholder="Ingrese usuario"
+              autocomplete="off"
+            >
+
+          </div>
+
+          <!-- ======================
+          PASSWORD
+          ====================== -->
+
+          <div class="input-group">
+
+            <label>
+              Contraseña
+            </label>
+
+            <input
+              type="password"
+              id="password"
+              placeholder="Ingrese contraseña"
+              autocomplete="off"
+            >
+
+          </div>
+
+          <!-- ======================
+          BOTON
+          ====================== -->
+
+          <button
+            type="submit"
+            class="btn-login"
+          >
+            Ingresar al Sistema
+          </button>
+
+        </form>
+
+        <!-- ======================
+        FOOTER LOGIN
+        ====================== -->
+
+        <div class="login-footer">
+
+          <p>
+            ElectroIngeniería © 2026 Desarrollado por Alkalu Innova
+          </p>
+
+        </div>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- ======================
+  MODAL BIENVENIDA
+  ====================== -->
+
+  <div class="modal-bienvenida" id="modalBienvenida">
+
+    <div class="modal-bienvenida-content">
+
+      <div class="bienvenida-left">
+
+        <div class="bienvenida-icon">
+          <img
+            src="img/ok.png"
+            alt="Bienvenida"
+          >
+        </div>
+
+        <h1>
+          ¡BIENVENIDO!
+        </h1>
+
+        <h2 id="bienvenidaUsuario">
+          Usuario
+        </h2>
+
+        <p>
+          Trabaja con buena energía 🚀
+        </p>
+
+      </div>
+
+      <div class="bienvenida-right">
+
+        <div class="bienvenida-check">
+          ✔
+        </div>
+
+        <h3>
+          Inicio de sesión exitoso
+        </h3>
+
+        <p>
+          Todo está listo para comenzar.
+        </p>
+
+        <div class="bienvenida-rol">
+          <span>Rol:</span>
+          <strong id="bienvenidaRol">
+            Usuario
+          </strong>
+        </div>
+
+        <button
+          class="btn-bienvenida"
+          onclick="cerrarModalBienvenida()"
+        >
+          🚀 ¡Vamos!
+        </button>
+
+      </div>
+
+    </div>
+
+  </div>
+
+  <!-- ======================
+  SCRIPTS GLOBALES Y LOGIN
+  ====================== -->
+
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="js/supabaseClient.js"></script>
+  <script src="js/notificaciones.js"></script>
+  <script src="js/login.js?v=6000"></script>
+
+</body>
+
+</html>

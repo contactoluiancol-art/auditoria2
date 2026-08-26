@@ -1,0 +1,292 @@
+<!-- ===================================== -->
+<!-- USUARIOS Y PERMISOS -->
+<!-- ===================================== -->
+
+<div class="module-container">
+
+  <!-- ==========================================
+       HEADER
+  =========================================== -->
+  <div class="module-header">
+    <div>
+      <h2>👥 Usuarios</h2>
+      <p>Administración de usuarios y permisos</p>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       FORMULARIO CREAR USUARIO
+  =========================================== -->
+  <div class="module-card">
+    <h3>Crear Usuario</h3>
+
+    <div class="form-grid">
+
+      <!-- USUARIO -->
+      <div class="input-group">
+        <label>Usuario</label>
+        <input
+          type="text"
+          id="usuarioInput"
+          placeholder="Ingrese usuario"
+        >
+      </div>
+
+      <!-- PASSWORD -->
+      <div class="input-group">
+        <label>Contraseña</label>
+        <input
+          type="password"
+          id="passwordInput"
+          placeholder="Ingrese contraseña"
+        >
+      </div>
+
+      <!-- ROL -->
+      <div class="input-group">
+        <label>Rol</label>
+        <select id="rolUsuario">
+          <option value="admin">admin</option>
+          <option value="lider">lider</option>
+          <option value="jefe">jefe</option>
+          <option value="auditor">auditor</option>
+          <option value="compras">compras</option>
+        </select>
+      </div>
+
+    </div>
+
+    <!-- ==========================================
+         MATRIZ DE PERMISOS GRANULARES
+    =========================================== -->
+    <div class="permisos-container">
+      <h3 class="permisos-title">🔐 Permisos del Usuario</h3>
+
+      <!-- INVENTARIO -->
+      <div class="permiso-card">
+        <h4>📦 Inventario</h4>
+
+        <div class="permiso-item">
+          <span>Ver</span>
+          <label class="switch">
+            <input type="checkbox" id="inventarioVer">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="permiso-item">
+          <span>Crear</span>
+          <label class="switch">
+            <input type="checkbox" id="inventarioCrear">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="permiso-item">
+          <span>Editar</span>
+          <label class="switch">
+            <input type="checkbox" id="inventarioEditar">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="permiso-item">
+          <span>Eliminar</span>
+          <label class="switch">
+            <input type="checkbox" id="inventarioEliminar">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- RECEPCIÓN -->
+      <div class="permiso-card">
+        <h4>📥 Recepción</h4>
+
+        <div class="permiso-item">
+          <span>Ver</span>
+          <label class="switch">
+            <input type="checkbox" id="recepcionVer">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="permiso-item">
+          <span>Crear</span>
+          <label class="switch">
+            <input type="checkbox" id="recepcionCrear">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="permiso-item">
+          <span>Editar</span>
+          <label class="switch">
+            <input type="checkbox" id="recepcionEditar">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="permiso-item">
+          <span>Eliminar</span>
+          <label class="switch">
+            <input type="checkbox" id="recepcionEliminar">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- AUDITORÍAS -->
+      <div class="permiso-card">
+        <h4>📋 Auditorías</h4>
+
+        <div class="permiso-item">
+          <span>Ver</span>
+          <label class="switch">
+            <input type="checkbox" id="auditoriasVer">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="permiso-item">
+          <span>Crear</span>
+          <label class="switch">
+            <input type="checkbox" id="auditoriasCrear">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="permiso-item">
+          <span>Editar</span>
+          <label class="switch">
+            <input type="checkbox" id="auditoriasEditar">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="permiso-item">
+          <span>Eliminar</span>
+          <label class="switch">
+            <input type="checkbox" id="auditoriasEliminar">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- USUARIOS -->
+      <div class="permiso-card">
+        <h4>👥 Usuarios</h4>
+
+        <div class="permiso-item">
+          <span>Ver</span>
+          <label class="switch">
+            <input type="checkbox" id="usuariosVer">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="permiso-item">
+          <span>Crear</span>
+          <label class="switch">
+            <input type="checkbox" id="usuariosCrear">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="permiso-item">
+          <span>Editar</span>
+          <label class="switch">
+            <input type="checkbox" id="usuariosEditar">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="permiso-item">
+          <span>Eliminar</span>
+          <label class="switch">
+            <input type="checkbox" id="usuariosEliminar">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- CONFIABILIDAD -->
+      <div class="permiso-card">
+        <h4>📊 Confiabilidad</h4>
+
+        <div class="permiso-item">
+          <span>Ver</span>
+          <label class="switch">
+            <input type="checkbox" id="confiabilidadVer">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="permiso-item">
+          <span>Crear</span>
+          <label class="switch">
+            <input type="checkbox" id="confiabilidadCrear">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="permiso-item">
+          <span>Editar</span>
+          <label class="switch">
+            <input type="checkbox" id="confiabilidadEditar">
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <div class="permiso-item">
+          <span>Eliminar</span>
+          <label class="switch">
+            <input type="checkbox" id="confiabilidadEliminar">
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- BOTON GUARDAR -->
+    <div class="button-group">
+      <button
+        id="guardarUsuario"
+        class="btn-primary"
+      >
+        Guardar Usuario
+      </button>
+    </div>
+  </div>
+
+  <!-- ==========================================
+       TABLA DE USUARIOS REGISTRADOS
+  =========================================== -->
+  <div class="module-card">
+    <div class="table-header">
+      <h3>Usuarios Registrados</h3>
+      <input
+        type="text"
+        id="buscarUsuario"
+        placeholder="Buscar usuario..."
+        class="search-input"
+      >
+    </div>
+
+    <div class="table-container">
+      <table>
+        <thead>
+          <tr>
+            <th style="width:25%;">Usuario</th>
+            <th style="width:20%;">Rol</th>
+            <th style="width:20%;">Estado</th>
+            <th style="width:35%;">Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="usuariosBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>

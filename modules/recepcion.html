@@ -1,0 +1,500 @@
+<!-- ===================================== -->
+<!-- RECEPCIÓN -->
+<!-- ===================================== -->
+
+<div class="module-container">
+
+  <!-- ===================================== -->
+  <!-- HEADER -->
+  <!-- ===================================== -->
+
+  <div class="module-header">
+    <div>
+      <h2>📥 Recepción</h2>
+      <p>Control de recepción de mercancía</p>
+    </div>
+  </div>
+
+  <!-- ===================================== -->
+  <!-- KPIS -->
+  <!-- ===================================== -->
+
+  <div class="kpi-grid">
+
+    <div class="kpi-card">
+      <span>Recepciones</span>
+      <h3 id="kpiRecepciones">0</h3>
+    </div>
+
+    <div class="kpi-card">
+      <span>% Revisado</span>
+      <h3 id="kpiRevisado">0%</h3>
+    </div>
+
+    <div class="kpi-card">
+      <span>Novedades</span>
+      <h3 id="kpiNovedades">0</h3>
+    </div>
+
+    <div class="kpi-card">
+      <span>Faltantes</span>
+      <h3 id="kpiFaltantes">0</h3>
+    </div>
+
+  </div>
+
+  <!-- ===================================== -->
+  <!-- DASHBOARD RECEPCION -->
+  <!-- ===================================== -->
+
+  <div class="module-card">
+
+    <div class="table-header">
+      <button
+        id="descargarDashboardRecepcion"
+        class="btn-primary"
+      >
+        📊 Dashboard Ejecutivo
+      </button>
+    </div>
+
+    <div class="dashboard-resumen">
+      <p>
+        📊 Resumen mensual de recepciones con novedades,
+        faltantes, sobrantes y materiales dañados.
+      </p>
+    </div>
+
+    <div class="dashboard-tabla">
+      <table class="table-pro">
+        <thead>
+          <tr>
+            <th>Mes</th>
+            <th>Recepciones</th>
+            <th>Faltantes</th>
+            <th>Sobrantes</th>
+            <th>Dañados</th>
+            <th>Total Novedades</th>
+          </tr>
+        </thead>
+        <tbody id="dashboardRecepcionBody"></tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <!-- ===================================== -->
+  <!-- FORMULARIO NUEVA RECEPCIÓN -->
+  <!-- ===================================== -->
+
+  <div class="module-card">
+
+    <h3>Nueva Recepción</h3>
+
+    <div class="form-grid">
+
+      <!-- PROVEEDOR -->
+      <div class="input-group">
+        <label>Proveedor</label>
+        <input
+          type="text"
+          id="proveedorInput"
+          placeholder="Proveedor"
+        >
+      </div>
+
+      <!-- MATERIAL -->
+      <div class="input-group">
+        <label>Material</label>
+        <input
+          type="text"
+          id="materialInput"
+          placeholder="Material"
+        >
+      </div>
+
+      <!-- TIPO -->
+      <div class="input-group">
+        <label>Tipo Recepción</label>
+        <select id="tipoRecepcionInput">
+          <option value="Cajas">📦 Cajas</option>
+          <option value="Unidades">🔌 Unidades</option>
+          <option value="Cable Metro">🧵 Cable por Metro</option>
+          <option value="Rollos">🎞️ Rollos</option>
+          <option value="Carretos">🛞 Carretos</option>
+        </select>
+      </div>
+
+      <!-- CANTIDAD -->
+      <div class="input-group">
+        <label>Cantidad</label>
+        <input
+          type="number"
+          id="cantidadInput"
+          placeholder="Cantidad"
+        >
+      </div>
+
+      <!-- REVISADAS -->
+      <div class="input-group">
+        <label>Revisadas</label>
+        <input
+          type="number"
+          id="revisadasInput"
+          placeholder="Revisadas"
+        >
+      </div>
+
+      <!-- NOVEDADES -->
+      <div class="input-group">
+        <label>Novedades</label>
+        <input
+          type="number"
+          id="novedadesInput"
+          placeholder="Novedades"
+        >
+      </div>
+
+      <!-- FALTANTES -->
+      <div class="input-group">
+        <label>Faltantes</label>
+        <input
+          type="number"
+          id="faltantesInput"
+          placeholder="Faltantes"
+        >
+      </div>
+
+      <!-- ESTADO -->
+      <div class="input-group">
+        <label>Estado</label>
+        <select id="estadoRecepcionInput">
+          <option value="Dañado">🔴 Dañado</option>
+          <option value="Faltante">🟠 Faltante</option>
+          <option value="Sobrante">🔵 Sobrante</option>
+          <option value="Cerrado">🔒 Novedad</option>
+        </select>
+      </div>
+
+    </div>
+
+    <!-- OBSERVACION -->
+    <div class="input-group textarea-group">
+      <label>Observación Recepción</label>
+      <textarea
+        id="observacionInput"
+        placeholder="Ingrese observaciones"
+      ></textarea>
+    </div>
+
+    <!-- SOPORTES DOCUMENTALES -->
+    <div class="input-group textarea-group">
+      <div class="adjuntos-panel">
+
+        <div class="adjuntos-panel__header">
+          <div>
+            <strong>Soportes de la recepción</strong>
+            <p>Adjunte entre 1 y 10 imágenes, PDF, videos o enlaces de Google Drive.</p>
+          </div>
+          <span class="adjuntos-contador" id="contadorSoportesRecepcion">0 / 10</span>
+        </div>
+
+        <div class="adjuntos-acciones">
+          <input
+            type="file"
+            id="pdfInput"
+            accept="image/*,application/pdf,video/*,.heic,.heif,.mov,.m4v,.mkv"
+            multiple
+            hidden
+          >
+          <button
+            type="button"
+            id="btnAgregarSoportesRecepcion"
+            class="btn-secondary"
+          >
+            ＋ Seleccionar archivos
+          </button>
+        </div>
+
+        <div class="adjuntos-link-row">
+          <input
+            type="url"
+            id="driveLinkRecepcion"
+            placeholder="Pegue un enlace de Google Drive"
+          >
+          <button
+            type="button"
+            id="btnAgregarDriveRecepcion"
+            class="btn-secondary"
+          >
+            Agregar enlace
+          </button>
+        </div>
+
+        <div id="listaSoportesRecepcion" class="adjuntos-lista">
+          <div class="adjunto-vacio">Aún no se han agregado soportes.</div>
+        </div>
+
+        <p class="adjuntos-ayuda">
+          Formatos admitidos: imágenes, PDF y video. Tamaño máximo por archivo: 100 MB.
+        </p>
+
+      </div>
+    </div>
+
+    <!-- BOTON GUARDAR -->
+    <div class="button-group">
+      <button
+        id="guardarRecepcion"
+        class="btn-primary"
+      >
+        Guardar Recepción
+      </button>
+    </div>
+
+  </div>
+
+  <!-- ===================================== -->
+  <!-- TABLA DE RECEPCIONES -->
+  <!-- ===================================== -->
+
+  <div class="module-card">
+
+    <div class="table-header">
+      <h3>Recepciones Registradas</h3>
+    </div>
+
+    <div class="table-container">
+      <table class="table-pro">
+        <thead>
+          <tr>
+            <th>Proveedor</th>
+            <th>Material</th>
+            <th>Tipo</th>
+            <th>Cant</th>
+            <th>%</th>
+            <th>Novedades</th>
+            <th>Estado Recepción</th>
+            <th>Estado Gestión</th>
+            <th>Fecha</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="recepcionesBody"></tbody>
+      </table>
+    </div>
+
+  </div>
+
+  <!-- ===================================== -->
+  <!-- MODAL GESTION COMPRAS -->
+  <!-- ===================================== -->
+
+  <div class="modal-gestion" id="modalGestion">
+    <div class="modal-gestion-content">
+
+      <!-- HEADER MODAL -->
+      <div class="modal-gestion-header">
+        <div>
+          <h2>🛒 Gestión Compras</h2>
+          <p>Seguimiento y gestión de novedades</p>
+        </div>
+        <button
+          class="cerrar-modal-btn"
+          onclick="cerrarModalGestion()"
+        >
+          ✕
+        </button>
+      </div>
+
+      <!-- BODY MODAL -->
+      <div class="modal-gestion-body">
+        <div class="gestion-layout">
+
+          <!-- FORMULARIO -->
+          <div class="gestion-formulario">
+            <div class="input-group">
+              <label>Estado Gestión</label>
+              <select id="gestionEstadoInput">
+                <option value="Pendiente">🟡 Pendiente</option>
+                <option value="En Gestión Compras">🛒 En Gestión Compras</option>
+                <option value="Contactando Proveedor">📞 Contactando Proveedor</option>
+                <option value="Esperando Respuesta">📦 Esperando Respuesta</option>
+                <option value="Solucionado">🟢 Solucionado</option>
+                <option value="Cerrado">🔒 Cerrado</option>
+              </select>
+            </div>
+
+            <div class="input-group">
+              <label>Comentario Gestión</label>
+              <textarea
+                id="gestionComentarioInput"
+                placeholder="Ingrese seguimiento de compras..."
+              ></textarea>
+            </div>
+          </div>
+
+          <!-- HISTORIAL TIMELINE -->
+          <div class="gestion-historial">
+            <div class="timeline-header">
+              <h3>📋 Historial de Gestión</h3>
+              <span class="timeline-subtitle">
+                Trazabilidad completa de la novedad
+              </span>
+            </div>
+
+            <div id="timelineSeguimiento">
+              <div class="timeline-empty">
+                <div class="timeline-empty-icon">📦</div>
+                <h4>Sin movimientos registrados</h4>
+                <p>
+                  Cuando Compras realice una gestión,
+                  el historial aparecerá aquí.
+                </p>
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- FOOTER MODAL -->
+      <div class="modal-gestion-footer">
+        <button
+          class="btn-danger"
+          onclick="cerrarModalGestion()"
+        >
+          Cancelar
+        </button>
+        <button
+          class="btn-primary"
+          id="guardarGestionBtn"
+        >
+          Guardar Gestión
+        </button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ===================================== -->
+  <!-- MODAL OBSERVACION -->
+  <!-- ===================================== -->
+
+  <div class="modal-observacion" id="modalObservacion">
+    <div class="modal-observacion-content">
+      <div class="modal-observacion-header">
+        <h2>👁️ Observación Recepción</h2>
+        <button
+          class="cerrar-modal-btn"
+          onclick="cerrarModalObservacion()"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div
+        class="modal-observacion-body"
+        id="contenidoObservacion"
+      ></div>
+    </div>
+  </div>
+
+  <!-- ===================================== -->
+  <!-- MODAL SOPORTES RECEPCIÓN -->
+  <!-- ===================================== -->
+
+  <div class="modal-observacion" id="modalSoportesRecepcion">
+    <div class="modal-observacion-content">
+
+      <div class="modal-observacion-header">
+        <h2>📎 Soportes de la Recepción</h2>
+        <button
+          class="cerrar-modal-btn"
+          onclick="cerrarModalSoportesRecepcion()"
+        >
+          ✕
+        </button>
+      </div>
+
+      <div
+        class="modal-observacion-body"
+        id="contenidoSoportesRecepcion"
+      ></div>
+
+      <div class="adjuntos-panel" style="margin: 0 18px 18px;">
+        <div class="adjuntos-panel__header">
+          <div>
+            <strong>Agregar más soportes</strong>
+            <p>Puede completar el registro hasta llegar a 10 soportes.</p>
+          </div>
+          <span class="adjuntos-contador" id="contadorSoportesRecepcionModal">0 / 10</span>
+        </div>
+
+        <div class="adjuntos-acciones">
+          <input
+            type="file"
+            id="actualizarSoportesRecepcionInput"
+            accept="image/*,application/pdf,video/*,.heic,.heif,.mov,.m4v,.mkv"
+            multiple
+            hidden
+          >
+          <button
+            type="button"
+            id="btnAgregarArchivosRecepcionModal"
+            class="btn-secondary"
+          >
+            ＋ Seleccionar archivos
+          </button>
+        </div>
+
+        <div class="adjuntos-link-row">
+          <input
+            type="url"
+            id="driveLinkRecepcionModal"
+            placeholder="Pegue un enlace de Google Drive"
+          >
+          <button
+            type="button"
+            id="btnAgregarDriveRecepcionModal"
+            class="btn-secondary"
+          >
+            Agregar enlace
+          </button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ===================================== -->
+  <!-- MODAL ALERTA -->
+  <!-- ===================================== -->
+
+  <div class="modal-alerta" id="modalAlerta">
+    <div class="modal-alerta-content">
+      <button
+        class="cerrar-alerta"
+        onclick="cerrarAlerta()"
+      >
+        ✕
+      </button>
+
+      <div class="alerta-icon">⚠️</div>
+      <h2 id="tituloAlerta">¡Ups! 😕</h2>
+      <h3 id="mensajeAlerta">Debes completar todos los campos</h3>
+      <p>
+        Por favor verifica la información
+        e intenta nuevamente.
+      </p>
+
+      <button
+        class="btn-alerta"
+        onclick="cerrarAlerta()"
+      >
+        ✓ Entendido
+      </button>
+    </div>
+  </div>
+
+</div>
