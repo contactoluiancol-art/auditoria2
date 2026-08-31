@@ -1,14 +1,13 @@
 -- ====================================================================
--- ERP AUDITORÍA & LOGÍSTICA - SUITE MAESTRA DE MIGRACIONES SQL
--- Arquitectura de Base de Datos, RLS Granular, Triggers y Realtime
--- Versión: 2.7.0 (Producción)
+-- SISTEMA INTEGRAL ERP AUDITORÍA & LOGÍSTICA — ESQUEMA COMPLETO v2.7.0
+-- Motor de Base de Datos PostgreSQL / Supabase
 -- ====================================================================
 
--- 1. EXTENSIONES Y UTILIDADES
+-- 1. EXTENSIONES Y FUNCIONES DE SOPORTE
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- Función para actualizar timestamps automáticamente
+-- Función de actualización automática de timestamps
 CREATE OR REPLACE FUNCTION public.handle_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -18,16 +17,16 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- ====================================================================
--- 2. TABLAS PRINCIPALES DEL SISTEMA
+-- 2. TABLAS BASE DEL SISTEMA
 -- ====================================================================
 
--- 2.1 TABLA DE USUARIOS
+-- 2.1 TABLA DE USUARIOS Y ROLES (RBAC)
 CREATE TABLE IF NOT EXISTS public.usuarios (
     id BIGSERIAL PRIMARY KEY,
     usuario TEXT NOT NULL UNIQUE,
     password TEXT NOT NULL,
-    rol TEXT NOT NULL DEFAULT 'auditor' CHECK (rol IN ('admin', 'auditor', 'compras', 'lider', 'jefe', 'operador')),
-    estado TEXT NOT NULL DEFAULT 'Activo' CHECK (estado IN ('Activo', 'Inactivo', 'Suspendido')),
+    rol TEXT NOT NULL DEFAULT 'auditor' CHECK (rol IN ('admin', 'lider', 'jefe', 'auditor', 'compras')),
+    estado TEXT NOT NULL DEFAULT 'Activo' CHECK (estado IN ('Activo', 'Inactivo')),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -36,7 +35,7 @@ CREATE TRIGGER tr_usuarios_updated_at
 BEFORE UPDATE ON public.usuarios
 FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
--- 2.2 TABLA DE PERMISOS GRANULARES (RBAC)
+-- 2.2 TABLA DE PERMISOS GRANULARES POR MÓDULO
 CREATE TABLE IF NOT EXISTS public.permisos (
     id BIGSERIAL PRIMARY KEY,
     usuario TEXT NOT NULL REFERENCES public.usuarios(usuario) ON UPDATE CASCADE ON DELETE CASCADE,
@@ -46,27 +45,32 @@ CREATE TABLE IF NOT EXISTS public.permisos (
     editar BOOLEAN NOT NULL DEFAULT false,
     eliminar BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     UNIQUE(usuario, modulo)
 );
 
--- 2.3 TABLA DE RECEPCIONES LOGÍSTICAS
+CREATE TRIGGER tr_permisos_updated_at
+BEFORE UPDATE ON public.permisos
+FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
+
+-- 2.3 TABLA DE RECEPCIONES LOGÍSTICAS Y COMPRAS
 CREATE TABLE IF NOT EXISTS public.recepciones (
     id BIGSERIAL PRIMARY KEY,
     proveedor TEXT NOT NULL,
     material TEXT NOT NULL,
-    tipo_recepcion TEXT NOT NULL DEFAULT 'Cajas',
+    tipo_recepcion TEXT DEFAULT 'Cargamento Regular',
     cantidad NUMERIC NOT NULL DEFAULT 0,
     revisadas NUMERIC NOT NULL DEFAULT 0,
     novedades NUMERIC NOT NULL DEFAULT 0,
     faltantes NUMERIC NOT NULL DEFAULT 0,
     porcentaje_revisado NUMERIC NOT NULL DEFAULT 0,
-    estado TEXT NOT NULL DEFAULT 'Dañado',
-    novedad_original TEXT,
     observacion TEXT,
     comentario_validacion TEXT,
     seguimiento TEXT,
+    estado TEXT NOT NULL DEFAULT 'Pendiente',
+    novedad_original TEXT DEFAULT 'Conforme',
     pdf_url TEXT,
-    usuario_recepcion TEXT DEFAULT 'Sistema',
+    usuario_recepcion TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -75,14 +79,14 @@ CREATE TRIGGER tr_recepciones_updated_at
 BEFORE UPDATE ON public.recepciones
 FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
--- 2.4 TABLA DE SEGUIMIENTO Y GESTIÓN DE COMPRAS
+-- 2.4 TABLA DE SEGUIMIENTO HISTÓRICO DE RECEPCIONES
 CREATE TABLE IF NOT EXISTS public.seguimiento_recepcion (
     id BIGSERIAL PRIMARY KEY,
     recepcion_id BIGINT NOT NULL REFERENCES public.recepciones(id) ON DELETE CASCADE,
     estado_anterior TEXT,
     estado_nuevo TEXT NOT NULL,
-    comentario TEXT,
-    usuario TEXT NOT NULL DEFAULT 'Compras',
+    comentario TEXT NOT NULL,
+    usuario TEXT NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
@@ -93,12 +97,11 @@ CREATE TABLE IF NOT EXISTS public.auditorias (
     nombre TEXT NOT NULL,
     responsable TEXT NOT NULL,
     fecha DATE NOT NULL DEFAULT CURRENT_DATE,
-    proceso TEXT,
-    estado TEXT NOT NULL DEFAULT 'Pendiente' CHECK (estado IN ('Pendiente', 'En proceso', 'Finalizada', 'Cancelada')),
+    proceso TEXT NOT NULL,
+    estado TEXT NOT NULL DEFAULT 'Pendiente',
     observaciones TEXT,
     pdf_url TEXT,
-    documentos JSONB DEFAULT '[]'::jsonb,
-    usuario TEXT DEFAULT 'Sistema',
+    usuario TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -107,29 +110,30 @@ CREATE TRIGGER tr_auditorias_updated_at
 BEFORE UPDATE ON public.auditorias
 FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 
--- 2.6 TABLA DE SOPORTES DOCUMENTALES DE AUDITORÍAS
+-- 2.6 TABLA DE DOCUMENTOS Y EVIDENCIAS DE AUDITORÍA
 CREATE TABLE IF NOT EXISTS public.auditoria_documentos (
     id BIGSERIAL PRIMARY KEY,
     auditoria_id BIGINT NOT NULL REFERENCES public.auditorias(id) ON DELETE CASCADE,
-    tipo TEXT NOT NULL DEFAULT 'archivo',
     nombre TEXT NOT NULL,
     url TEXT NOT NULL,
-    ruta TEXT,
-    mime TEXT,
-    tamano BIGINT NOT NULL DEFAULT 0,
+    ruta_storage TEXT,
+    mime_type TEXT,
+    tamano_bytes BIGINT DEFAULT 0,
+    tipo_origen TEXT NOT NULL DEFAULT 'archivo',
+    usuario TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 2.7 TABLA DE INVENTARIO FÍSICO Y SISTEMA
+-- 2.7 TABLA DE INVENTARIO Y CONTEOS FÍSICOS
 CREATE TABLE IF NOT EXISTS public.inventario (
     id BIGSERIAL PRIMARY KEY,
-    codigo TEXT NOT NULL,
+    codigo TEXT NOT NULL UNIQUE,
     producto TEXT NOT NULL,
-    ubicacion TEXT,
+    ubicacion TEXT DEFAULT 'Principal',
     stock_sistema NUMERIC NOT NULL DEFAULT 0,
     conteo_fisico NUMERIC,
     diferencia NUMERIC,
-    estado TEXT DEFAULT 'Pendiente',
+    estado TEXT NOT NULL DEFAULT 'Pendiente',
     usuario TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -196,13 +200,16 @@ CREATE TABLE IF NOT EXISTS public.historial (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
--- 2.11 TABLA DE NOTIFICACIONES MULTI-USUARIO PERSISTENTES
+-- 2.11 TABLA DE NOTIFICACIONES CENTRALIZADAS MULTI-USUARIO (PERSISTENCIA DIFERIDA & REALTIME)
 CREATE TABLE IF NOT EXISTS public.notificaciones (
     id BIGSERIAL PRIMARY KEY,
-    usuario TEXT NOT NULL DEFAULT 'general',
+    usuario_destino TEXT NOT NULL,
+    usuario_origen TEXT NOT NULL DEFAULT 'Sistema',
     titulo TEXT NOT NULL,
     mensaje TEXT NOT NULL,
     tipo TEXT NOT NULL DEFAULT 'info' CHECK (tipo IN ('info', 'success', 'warning', 'error')),
+    modulo TEXT NOT NULL DEFAULT 'general' CHECK (modulo IN ('recepcion', 'auditorias', 'inventario', 'confiabilidad', 'usuarios', 'general')),
+    referencia_id TEXT,
     leida BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -221,10 +228,232 @@ CREATE INDEX IF NOT EXISTS idx_inventario_codigo ON public.inventario(codigo);
 CREATE INDEX IF NOT EXISTS idx_novedades_codigo ON public.novedades_inventario(codigo);
 CREATE INDEX IF NOT EXISTS idx_confiabilidad_anio_mes ON public.confiabilidad(anio, mes);
 CREATE INDEX IF NOT EXISTS idx_historial_created_at ON public.historial(created_at DESC);
-CREATE INDEX IF NOT EXISTS idx_notificaciones_usuario ON public.notificaciones(usuario, leida, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notificaciones_destino ON public.notificaciones(usuario_destino, leida, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notificaciones_modulo ON public.notificaciones(modulo, referencia_id);
 
 -- ====================================================================
--- 4. STORAGE BUCKETS (SUPABASE STORAGE)
+-- 4. DISPARADORES AUTOMÁTICOS DE NOTIFICACIONES MULTI-USUARIO
+-- ====================================================================
+
+-- 4.1 TRIGGER PARA NUEVAS RECEPCIONES LOGÍSTICAS
+CREATE OR REPLACE FUNCTION public.fn_notificar_nueva_recepcion()
+RETURNS TRIGGER 
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    rec_user RECORD;
+    u_origen TEXT;
+    msg TEXT;
+    tit TEXT;
+    tipo_alerta TEXT;
+BEGIN
+    u_origen := COALESCE(NEW.usuario_recepcion, 'Recepción');
+    tit := '📦 Nueva Recepción #' || NEW.id;
+    msg := 'Nueva recepción registrada por ' || u_origen || ': Proveedor ' || COALESCE(NEW.proveedor, 'N/A') || ' - Material ' || COALESCE(NEW.material, 'N/A') || ' (Cant: ' || COALESCE(NEW.cantidad, 0) || ')';
+
+    IF NEW.estado ILIKE '%dañ%' OR NEW.estado ILIKE '%falt%' OR COALESCE(NEW.faltantes, 0) > 0 OR COALESCE(NEW.novedades, 0) > 0 THEN
+        tipo_alerta := 'warning';
+    ELSE
+        tipo_alerta := 'success';
+    END IF;
+
+    -- Insertar notificación para cada usuario activo del sistema
+    FOR rec_user IN 
+        SELECT usuario FROM public.usuarios WHERE estado = 'Activo'
+    LOOP
+        INSERT INTO public.notificaciones (
+            usuario_destino,
+            usuario_origen,
+            titulo,
+            mensaje,
+            tipo,
+            modulo,
+            referencia_id,
+            leida,
+            created_at
+        ) VALUES (
+            rec_user.usuario,
+            u_origen,
+            tit,
+            msg,
+            tipo_alerta,
+            'recepcion',
+            NEW.id::text,
+            false,
+            NOW()
+        );
+    END LOOP;
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS tr_notificar_nueva_recepcion ON public.recepciones;
+CREATE TRIGGER tr_notificar_nueva_recepcion
+AFTER INSERT ON public.recepciones
+FOR EACH ROW EXECUTE FUNCTION public.fn_notificar_nueva_recepcion();
+
+-- 4.2 TRIGGER PARA SEGUIMIENTO COMERCIAL & PROVEEDORES
+CREATE OR REPLACE FUNCTION public.fn_notificar_nuevo_seguimiento()
+RETURNS TRIGGER 
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    rec_user RECORD;
+    u_origen TEXT;
+    prov TEXT;
+    msg TEXT;
+    tit TEXT;
+BEGIN
+    u_origen := COALESCE(NEW.usuario, 'Compras');
+    
+    SELECT proveedor INTO prov FROM public.recepciones WHERE id = NEW.recepcion_id;
+    prov := COALESCE(prov, 'Recepción #' || NEW.recepcion_id);
+
+    tit := '🛒 Intervención en Recepción #' || NEW.recepcion_id;
+    msg := u_origen || ' actualizó el estado a [' || COALESCE(NEW.estado_nuevo, 'Seguimiento') || '] para ' || prov || ': ' || COALESCE(NEW.comentario, '');
+
+    FOR rec_user IN 
+        SELECT usuario FROM public.usuarios WHERE estado = 'Activo'
+    LOOP
+        INSERT INTO public.notificaciones (
+            usuario_destino,
+            usuario_origen,
+            titulo,
+            mensaje,
+            tipo,
+            modulo,
+            referencia_id,
+            leida,
+            created_at
+        ) VALUES (
+            rec_user.usuario,
+            u_origen,
+            tit,
+            msg,
+            'info',
+            'recepcion',
+            NEW.recepcion_id::text,
+            false,
+            NOW()
+        );
+    END LOOP;
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS tr_notificar_nuevo_seguimiento ON public.seguimiento_recepcion;
+CREATE TRIGGER tr_notificar_nuevo_seguimiento
+AFTER INSERT ON public.seguimiento_recepcion
+FOR EACH ROW EXECUTE FUNCTION public.fn_notificar_nuevo_seguimiento();
+
+-- 4.3 TRIGGER PARA NUEVAS AUDITORÍAS PERICIALES
+CREATE OR REPLACE FUNCTION public.fn_notificar_nueva_auditoria()
+RETURNS TRIGGER 
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    rec_user RECORD;
+    u_origen TEXT;
+    msg TEXT;
+    tit TEXT;
+BEGIN
+    u_origen := COALESCE(NEW.usuario, NEW.responsable, 'Auditoría');
+    tit := '📋 Nueva Auditoría: ' || COALESCE(NEW.nombre, 'Sin título');
+    msg := 'Auditoría (' || COALESCE(NEW.tipo, 'General') || ') registrada por ' || u_origen || ' - Proceso: ' || COALESCE(NEW.proceso, 'N/A') || ' - Estado: ' || COALESCE(NEW.estado, 'Pendiente');
+
+    FOR rec_user IN 
+        SELECT usuario FROM public.usuarios WHERE estado = 'Activo'
+    LOOP
+        INSERT INTO public.notificaciones (
+            usuario_destino,
+            usuario_origen,
+            titulo,
+            mensaje,
+            tipo,
+            modulo,
+            referencia_id,
+            leida,
+            created_at
+        ) VALUES (
+            rec_user.usuario,
+            u_origen,
+            tit,
+            msg,
+            'info',
+            'auditorias',
+            NEW.id::text,
+            false,
+            NOW()
+        );
+    END LOOP;
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS tr_notificar_nueva_auditoria ON public.auditorias;
+CREATE TRIGGER tr_notificar_nueva_auditoria
+AFTER INSERT ON public.auditorias
+FOR EACH ROW EXECUTE FUNCTION public.fn_notificar_nueva_auditoria();
+
+-- 4.4 TRIGGER PARA NOVEDADES DE INVENTARIO
+CREATE OR REPLACE FUNCTION public.fn_notificar_novedad_inventario()
+RETURNS TRIGGER 
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+    rec_user RECORD;
+    u_origen TEXT;
+    msg TEXT;
+    tit TEXT;
+BEGIN
+    u_origen := COALESCE(NEW.usuario, 'Inventario');
+    tit := '⚠️ Novedad en Inventario: ' || COALESCE(NEW.codigo, '');
+    msg := 'Discrepancia [' || COALESCE(NEW.tipo, 'Novedad') || '] reportada por ' || u_origen || ' en material ' || COALESCE(NEW.material, '') || ' (Dif: ' || COALESCE(NEW.diferencia, 0) || ')';
+
+    FOR rec_user IN 
+        SELECT usuario FROM public.usuarios WHERE estado = 'Activo'
+    LOOP
+        INSERT INTO public.notificaciones (
+            usuario_destino,
+            usuario_origen,
+            titulo,
+            mensaje,
+            tipo,
+            modulo,
+            referencia_id,
+            leida,
+            created_at
+        ) VALUES (
+            rec_user.usuario,
+            u_origen,
+            tit,
+            msg,
+            'warning',
+            'inventario',
+            NEW.id::text,
+            false,
+            NOW()
+        );
+    END LOOP;
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS tr_notificar_novedad_inventario ON public.novedades_inventario;
+CREATE TRIGGER tr_notificar_novedad_inventario
+AFTER INSERT ON public.novedades_inventario
+FOR EACH ROW EXECUTE FUNCTION public.fn_notificar_novedad_inventario();
+
+-- ====================================================================
+-- 5. STORAGE BUCKETS (SUPABASE STORAGE)
 -- ====================================================================
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
 VALUES 
@@ -232,7 +461,6 @@ VALUES
     ('auditorias', 'auditorias', true, 104857600, ARRAY['image/*', 'application/pdf', 'video/*', 'text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'])
 ON CONFLICT (id) DO UPDATE SET public = true;
 
--- Políticas de Storage
 DO $$
 BEGIN
     DROP POLICY IF EXISTS "Acceso publico recepciones" ON storage.objects;
@@ -250,7 +478,7 @@ BEGIN
 END $$;
 
 -- ====================================================================
--- 5. ROW LEVEL SECURITY (RLS) DEFENSIVO & GRANULAR
+-- 6. ROW LEVEL SECURITY (RLS) DEFENSIVO & POLÍTICAS
 -- ====================================================================
 ALTER TABLE public.usuarios ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.permisos ENABLE ROW LEVEL SECURITY;
@@ -264,7 +492,6 @@ ALTER TABLE public.confiabilidad ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.historial ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notificaciones ENABLE ROW LEVEL SECURITY;
 
--- Limpieza de políticas previas
 DO $$
 DECLARE
     tbl text;
@@ -273,40 +500,25 @@ BEGIN
     LOOP
         EXECUTE format('DROP POLICY IF EXISTS "rls_all_%I" ON public.%I', tbl, tbl);
         EXECUTE format('DROP POLICY IF EXISTS "Acceso total %I" ON public.%I', tbl, tbl);
+        EXECUTE format('DROP POLICY IF EXISTS "rls_%I_all" ON public.%I', tbl, tbl);
     END LOOP;
 END $$;
 
--- Políticas Granulares de Operación
--- 1. Usuarios: Lectura y gestión controlada
-CREATE POLICY "rls_usuarios_select" ON public.usuarios FOR SELECT USING (true);
-CREATE POLICY "rls_usuarios_insert" ON public.usuarios FOR INSERT WITH CHECK (true);
-CREATE POLICY "rls_usuarios_update" ON public.usuarios FOR UPDATE USING (true);
-CREATE POLICY "rls_usuarios_delete" ON public.usuarios FOR DELETE USING (true);
-
--- 2. Permisos:
+-- Políticas de Acceso
+CREATE POLICY "rls_usuarios_all" ON public.usuarios FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "rls_permisos_all" ON public.permisos FOR ALL USING (true) WITH CHECK (true);
-
--- 3. Recepciones y Seguimiento:
 CREATE POLICY "rls_recepciones_all" ON public.recepciones FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "rls_seguimiento_all" ON public.seguimiento_recepcion FOR ALL USING (true) WITH CHECK (true);
-
--- 4. Auditorías y Documentos:
 CREATE POLICY "rls_auditorias_all" ON public.auditorias FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "rls_auditoria_documentos_all" ON public.auditoria_documentos FOR ALL USING (true) WITH CHECK (true);
-
--- 5. Inventario y Novedades:
 CREATE POLICY "rls_inventario_all" ON public.inventario FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "rls_novedades_all" ON public.novedades_inventario FOR ALL USING (true) WITH CHECK (true);
-
--- 6. Confiabilidad:
 CREATE POLICY "rls_confiabilidad_all" ON public.confiabilidad FOR ALL USING (true) WITH CHECK (true);
-
--- 7. Historial y Notificaciones:
 CREATE POLICY "rls_historial_all" ON public.historial FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "rls_notificaciones_all" ON public.notificaciones FOR ALL USING (true) WITH CHECK (true);
 
 -- ====================================================================
--- 6. HABILITACIÓN DE SUPABASE REALTIME
+-- 7. HABILITACIÓN DE SUPABASE REALTIME
 -- ====================================================================
 DO $$
 BEGIN
@@ -324,7 +536,7 @@ EXCEPTION
 END $$;
 
 -- ====================================================================
--- 7. SEED DATA (ADMINISTRADOR Y PERMISOS BASE)
+-- 8. SEED DATA (ADMINISTRADOR & PERMISOS INICIALES)
 -- ====================================================================
 INSERT INTO public.usuarios (usuario, password, rol, estado)
 VALUES ('admin', 'admin123', 'admin', 'Activo')
@@ -344,4 +556,4 @@ ON CONFLICT (usuario, modulo) DO UPDATE
 SET ver = true, crear = true, editar = true, eliminar = true;
 
 INSERT INTO public.historial (usuario, accion, modulo, descripcion)
-VALUES ('admin', 'INICIALIZACIÓN', 'sistema', 'Inicialización de esquema maestro, seguridad RLS y canales Realtime.');
+VALUES ('admin', 'INICIALIZACIÓN', 'sistema', 'Inicialización de esquema maestro, seguridad RLS, triggers de notificación y Realtime.');

@@ -269,11 +269,17 @@
   const panelNotificaciones = document.getElementById('panelNotificaciones');
 
   if (campanaBtn && panelNotificaciones) {
-    campanaBtn.onclick = function (e) {
+    campanaBtn.onclick = async function (e) {
       e.stopPropagation();
+      const estabaAbierto = panelNotificaciones.classList.contains('active');
       panelNotificaciones.classList.toggle('active');
-      if (typeof window.renderNotificaciones === 'function') {
-        window.renderNotificaciones();
+
+      if (!estabaAbierto) {
+        if (typeof window.cargarNotificacionesBD === 'function') {
+          await window.cargarNotificacionesBD();
+        } else if (typeof window.renderNotificaciones === 'function') {
+          window.renderNotificaciones();
+        }
       }
     };
 

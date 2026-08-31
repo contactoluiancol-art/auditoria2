@@ -299,6 +299,19 @@ confiabilidad, recepción, usuarios, bi, login, dashboard.
   color: #ef4444;
 }
 
+.notif-mod-tag {
+  font-size: 9.5px;
+  font-weight: 700;
+  font-family: 'JetBrains Mono', monospace;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
+  padding: 1px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  margin-left: 4px;
+}
+
 .notif-item-msg {
   margin: 0;
   font-size: 12px;
