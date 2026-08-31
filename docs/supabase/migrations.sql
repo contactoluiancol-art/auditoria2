@@ -1,9 +1,12 @@
 -- ====================================================================
 -- SISTEMA INTEGRAL ERP AUDITORÍA & LOGÍSTICA — ESQUEMA COMPLETO v2.7.0
 -- Motor de Base de Datos PostgreSQL / Supabase
+-- Totalmente Idempotente y Defensivo (Sin Errores 42P10)
 -- ====================================================================
 
+-- ====================================================================
 -- 1. EXTENSIONES Y FUNCIONES DE SOPORTE
+-- ====================================================================
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
@@ -23,7 +26,7 @@ $$ LANGUAGE plpgsql;
 -- 2.1 TABLA DE USUARIOS Y ROLES (RBAC)
 CREATE TABLE IF NOT EXISTS public.usuarios (
     id BIGSERIAL PRIMARY KEY,
-    usuario TEXT NOT NULL UNIQUE,
+    usuario TEXT NOT NULL,
     password TEXT NOT NULL,
     rol TEXT NOT NULL DEFAULT 'auditor' CHECK (rol IN ('admin', 'lider', 'jefe', 'auditor', 'compras')),
     estado TEXT NOT NULL DEFAULT 'Activo' CHECK (estado IN ('Activo', 'Inactivo')),
@@ -31,6 +34,20 @@ CREATE TABLE IF NOT EXISTS public.usuarios (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Asegurar restricción UNIQUE en usuario de forma idempotente
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'uq_usuarios_usuario'
+    ) THEN
+        BEGIN
+            ALTER TABLE public.usuarios ADD CONSTRAINT uq_usuarios_usuario UNIQUE (usuario);
+        EXCEPTION WHEN duplicate_table OR duplicate_object THEN NULL;
+        END;
+    END IF;
+END $$;
+
+DROP TRIGGER IF EXISTS tr_usuarios_updated_at ON public.usuarios;
 CREATE TRIGGER tr_usuarios_updated_at
 BEFORE UPDATE ON public.usuarios
 FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
@@ -38,17 +55,30 @@ FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
 -- 2.2 TABLA DE PERMISOS GRANULARES POR MÓDULO
 CREATE TABLE IF NOT EXISTS public.permisos (
     id BIGSERIAL PRIMARY KEY,
-    usuario TEXT NOT NULL REFERENCES public.usuarios(usuario) ON UPDATE CASCADE ON DELETE CASCADE,
+    usuario TEXT NOT NULL,
     modulo TEXT NOT NULL,
     ver BOOLEAN NOT NULL DEFAULT false,
     crear BOOLEAN NOT NULL DEFAULT false,
     editar BOOLEAN NOT NULL DEFAULT false,
     eliminar BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE(usuario, modulo)
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Asegurar restricción UNIQUE en (usuario, modulo) de forma idempotente
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'uq_permisos_usuario_modulo'
+    ) THEN
+        BEGIN
+            ALTER TABLE public.permisos ADD CONSTRAINT uq_permisos_usuario_modulo UNIQUE (usuario, modulo);
+        EXCEPTION WHEN duplicate_table OR duplicate_object THEN NULL;
+        END;
+    END IF;
+END $$;
+
+DROP TRIGGER IF EXISTS tr_permisos_updated_at ON public.permisos;
 CREATE TRIGGER tr_permisos_updated_at
 BEFORE UPDATE ON public.permisos
 FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
@@ -75,6 +105,7 @@ CREATE TABLE IF NOT EXISTS public.recepciones (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+DROP TRIGGER IF EXISTS tr_recepciones_updated_at ON public.recepciones;
 CREATE TRIGGER tr_recepciones_updated_at
 BEFORE UPDATE ON public.recepciones
 FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
@@ -106,6 +137,7 @@ CREATE TABLE IF NOT EXISTS public.auditorias (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+DROP TRIGGER IF EXISTS tr_auditorias_updated_at ON public.auditorias;
 CREATE TRIGGER tr_auditorias_updated_at
 BEFORE UPDATE ON public.auditorias
 FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
@@ -127,7 +159,7 @@ CREATE TABLE IF NOT EXISTS public.auditoria_documentos (
 -- 2.7 TABLA DE INVENTARIO Y CONTEOS FÍSICOS
 CREATE TABLE IF NOT EXISTS public.inventario (
     id BIGSERIAL PRIMARY KEY,
-    codigo TEXT NOT NULL UNIQUE,
+    codigo TEXT NOT NULL,
     producto TEXT NOT NULL,
     ubicacion TEXT DEFAULT 'Principal',
     stock_sistema NUMERIC NOT NULL DEFAULT 0,
@@ -139,6 +171,20 @@ CREATE TABLE IF NOT EXISTS public.inventario (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Asegurar restricción UNIQUE en codigo de inventario
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint WHERE conname = 'uq_inventario_codigo'
+    ) THEN
+        BEGIN
+            ALTER TABLE public.inventario ADD CONSTRAINT uq_inventario_codigo UNIQUE (codigo);
+        EXCEPTION WHEN duplicate_table OR duplicate_object THEN NULL;
+        END;
+    END IF;
+END $$;
+
+DROP TRIGGER IF EXISTS tr_inventario_updated_at ON public.inventario;
 CREATE TRIGGER tr_inventario_updated_at
 BEFORE UPDATE ON public.inventario
 FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
@@ -186,6 +232,7 @@ CREATE TABLE IF NOT EXISTS public.confiabilidad (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+DROP TRIGGER IF EXISTS tr_confiabilidad_updated_at ON public.confiabilidad;
 CREATE TRIGGER tr_confiabilidad_updated_at
 BEFORE UPDATE ON public.confiabilidad
 FOR EACH ROW EXECUTE FUNCTION public.handle_updated_at();
@@ -258,7 +305,6 @@ BEGIN
         tipo_alerta := 'success';
     END IF;
 
-    -- Insertar notificación para cada usuario activo del sistema
     FOR rec_user IN 
         SELECT usuario FROM public.usuarios WHERE estado = 'Activo'
     LOOP
@@ -453,13 +499,27 @@ AFTER INSERT ON public.novedades_inventario
 FOR EACH ROW EXECUTE FUNCTION public.fn_notificar_novedad_inventario();
 
 -- ====================================================================
--- 5. STORAGE BUCKETS (SUPABASE STORAGE)
+-- 5. STORAGE BUCKETS (SUPABASE STORAGE IDEMPOTENTE)
 -- ====================================================================
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-VALUES 
-    ('recepciones-pdf', 'recepciones-pdf', true, 104857600, ARRAY['image/*', 'application/pdf', 'video/*', 'text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']),
-    ('auditorias', 'auditorias', true, 104857600, ARRAY['image/*', 'application/pdf', 'video/*', 'text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'])
-ON CONFLICT (id) DO UPDATE SET public = true;
+SELECT 
+    'recepciones-pdf', 
+    'recepciones-pdf', 
+    true, 
+    104857600, 
+    ARRAY['image/*', 'application/pdf', 'video/*', 'text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+WHERE NOT EXISTS (SELECT 1 FROM storage.buckets WHERE id = 'recepciones-pdf');
+
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+SELECT 
+    'auditorias', 
+    'auditorias', 
+    true, 
+    104857600, 
+    ARRAY['image/*', 'application/pdf', 'video/*', 'text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']
+WHERE NOT EXISTS (SELECT 1 FROM storage.buckets WHERE id = 'auditorias');
+
+UPDATE storage.buckets SET public = true WHERE id IN ('recepciones-pdf', 'auditorias');
 
 DO $$
 BEGIN
@@ -536,24 +596,51 @@ EXCEPTION
 END $$;
 
 -- ====================================================================
--- 8. SEED DATA (ADMINISTRADOR & PERMISOS INICIALES)
+-- 8. SEED DATA IDEMPOTENTE (ADMINISTRADOR & PERMISOS INICIALES)
 -- ====================================================================
+-- 8.1 Usuario Administrador
 INSERT INTO public.usuarios (usuario, password, rol, estado)
-VALUES ('admin', 'admin123', 'admin', 'Activo')
-ON CONFLICT (usuario) DO UPDATE 
-SET estado = 'Activo', rol = 'admin';
+SELECT 'admin', 'admin123', 'admin', 'Activo'
+WHERE NOT EXISTS (SELECT 1 FROM public.usuarios WHERE usuario = 'admin');
+
+UPDATE public.usuarios 
+SET estado = 'Activo', rol = 'admin' 
+WHERE usuario = 'admin';
+
+-- 8.2 Permisos Base para Administrador
+INSERT INTO public.permisos (usuario, modulo, ver, crear, editar, eliminar)
+SELECT 'admin', 'inventario', true, true, true, true
+WHERE NOT EXISTS (SELECT 1 FROM public.permisos WHERE usuario = 'admin' AND modulo = 'inventario');
 
 INSERT INTO public.permisos (usuario, modulo, ver, crear, editar, eliminar)
-VALUES 
-    ('admin', 'inventario', true, true, true, true),
-    ('admin', 'recepcion', true, true, true, true),
-    ('admin', 'auditorias', true, true, true, true),
-    ('admin', 'confiabilidad', true, true, true, true),
-    ('admin', 'usuarios', true, true, true, true),
-    ('admin', 'historial', true, true, true, true),
-    ('admin', 'bi', true, true, true, true)
-ON CONFLICT (usuario, modulo) DO UPDATE 
-SET ver = true, crear = true, editar = true, eliminar = true;
+SELECT 'admin', 'recepcion', true, true, true, true
+WHERE NOT EXISTS (SELECT 1 FROM public.permisos WHERE usuario = 'admin' AND modulo = 'recepcion');
 
+INSERT INTO public.permisos (usuario, modulo, ver, crear, editar, eliminar)
+SELECT 'admin', 'auditorias', true, true, true, true
+WHERE NOT EXISTS (SELECT 1 FROM public.permisos WHERE usuario = 'admin' AND modulo = 'auditorias');
+
+INSERT INTO public.permisos (usuario, modulo, ver, crear, editar, eliminar)
+SELECT 'admin', 'confiabilidad', true, true, true, true
+WHERE NOT EXISTS (SELECT 1 FROM public.permisos WHERE usuario = 'admin' AND modulo = 'confiabilidad');
+
+INSERT INTO public.permisos (usuario, modulo, ver, crear, editar, eliminar)
+SELECT 'admin', 'usuarios', true, true, true, true
+WHERE NOT EXISTS (SELECT 1 FROM public.permisos WHERE usuario = 'admin' AND modulo = 'usuarios');
+
+INSERT INTO public.permisos (usuario, modulo, ver, crear, editar, eliminar)
+SELECT 'admin', 'historial', true, true, true, true
+WHERE NOT EXISTS (SELECT 1 FROM public.permisos WHERE usuario = 'admin' AND modulo = 'historial');
+
+INSERT INTO public.permisos (usuario, modulo, ver, crear, editar, eliminar)
+SELECT 'admin', 'bi', true, true, true, true
+WHERE NOT EXISTS (SELECT 1 FROM public.permisos WHERE usuario = 'admin' AND modulo = 'bi');
+
+UPDATE public.permisos 
+SET ver = true, crear = true, editar = true, eliminar = true 
+WHERE usuario = 'admin';
+
+-- 8.3 Registro Histórico Inicial
 INSERT INTO public.historial (usuario, accion, modulo, descripcion)
-VALUES ('admin', 'INICIALIZACIÓN', 'sistema', 'Inicialización de esquema maestro, seguridad RLS, triggers de notificación y Realtime.');
+SELECT 'admin', 'INICIALIZACIÓN', 'sistema', 'Inicialización de esquema maestro, seguridad RLS, triggers de notificación y Realtime.'
+WHERE NOT EXISTS (SELECT 1 FROM public.historial WHERE accion = 'INICIALIZACIÓN' AND modulo = 'sistema');
