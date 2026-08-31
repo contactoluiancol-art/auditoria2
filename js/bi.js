@@ -1,344 +1,348 @@
-// =====================================
-// BI DASHBOARD
-// =====================================
-// Envuelto en IIFE por la misma razón que confiabilidad.js:
-// este script se recarga cada vez que se entra al módulo BI,
-// y "let" a nivel global choca con la carga anterior
-// ("Identifier ... has already been declared"), deteniendo
-// la ejecución y dejando el módulo sin funcionar al volver.
-// =====================================
-(function(){
+/**
+ * ====================================================================
+ * BI.JS — Motor Unificado de Business Intelligence & Analítica
+ * ====================================================================
+ * Versión: 2.7.0
+ */
 
-let datosExcel = [];
-let grafico = null;
+(function () {
+  'use strict';
 
-// =========================
-// INICIALIZAR EVENTOS
-// =========================
+  let datosExcelOriginales = [];
+  let datosExcelFiltrados = [];
+  let chartPrincipal = null;
+  let chartTop = null;
+  let chartLinea = null;
+  let dataTableInstancia = null;
 
-document.addEventListener("DOMContentLoaded", () => {
+  function $(id) {
+    return document.getElementById(id);
+  }
 
-    const excelBI = document.getElementById("excelBI");
-
-    if (excelBI) {
-
-        excelBI.addEventListener(
-            "change",
-            leerExcel
-        );
-
+  function notificar(mensaje, tipo = 'warning') {
+    if (typeof window.mostrarNotificacion === 'function') {
+      window.mostrarNotificacion('BI Inteligente', mensaje, tipo);
+    } else if (typeof window.notifAlert === 'function') {
+      window.notifAlert(mensaje);
     }
+  }
 
-    const btnGenerar =
-        document.getElementById("btnGenerar");
-
-    if (btnGenerar) {
-
-        btnGenerar.addEventListener(
-            "click",
-            generarDashboard
-        );
-
-    }
-
-});
-
-// =========================
-// LEER EXCEL
-// =========================
-
-function leerExcel(e) {
-
-    const archivo = e.target.files[0];
-
-    if (!archivo) {
-
-        notifAlert("Seleccione un archivo Excel");
-
-        return;
-
-    }
+  // ==================================================================
+  // 1. CARGA DE EXCEL
+  // ==================================================================
+  function leerExcel(e) {
+    const file = e.target.files[0];
+    if (!file) return;
 
     const reader = new FileReader();
-
     reader.onload = function (evt) {
+      try {
+        const data = new Uint8Array(evt.target.result);
+        const workbook = XLSX.read(data, { type: 'array' });
+        const firstSheet = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheet];
+        const json = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
 
-        try {
-
-            const data = evt.target.result;
-
-            const workbook = XLSX.read(
-                data,
-                {
-                    type: "binary"
-                }
-            );
-
-            const hoja =
-                workbook.SheetNames[0];
-
-            const ws =
-                workbook.Sheets[hoja];
-
-            datosExcel =
-                XLSX.utils.sheet_to_json(
-                    ws,
-                    {
-                        defval: ""
-                    }
-                );
-
-            if (!datosExcel.length) {
-
-                notifAlert(
-                    "El archivo no contiene datos."
-                );
-
-                return;
-
-            }
-
-            cargarColumnas();
-
-            generarDashboard();
-
-        } catch (error) {
-
-            console.error(error);
-
-            notifAlert(
-                "Error leyendo el Excel."
-            );
-
+        if (!json || json.length === 0) {
+          notificar('El archivo no contiene registros o filas legibles.');
+          return;
         }
 
+        datosExcelOriginales = json;
+        datosExcelFiltrados = [...json];
+
+        configurarSelectores(json);
+        generarDashboardCompleto();
+        renderizarTablaBI(json);
+
+        notificar(`Se cargaron ${json.length} filas para análisis BI.`, 'success');
+
+      } catch (err) {
+        console.error('Error leyendo Excel en BI:', err);
+        notificar('Error al procesar el archivo Excel.', 'error');
+      }
     };
 
-    reader.readAsBinaryString(
-        archivo
-    );
+    reader.readAsArrayBuffer(file);
+  }
 
-}
+  // ==================================================================
+  // 2. DETECCIÓN DE COLUMNAS, DIMENSIONES Y MÉTRICAS
+  // ==================================================================
+  function configurarSelectores(datos) {
+    if (!datos.length) return;
 
-// =========================
-// CARGAR COLUMNAS
-// =========================
+    const columnas = Object.keys(datos[0]);
+    const selDim = $('dimension');
+    const selMet = $('metrica');
+    const selF1 = $('filtroColumna1');
+    const selF2 = $('filtroColumna2');
+    const lblF1 = $('labelFiltro1');
+    const lblF2 = $('labelFiltro2');
 
-function cargarColumnas() {
+    if (!selDim || !selMet) return;
 
-    if (!datosExcel.length)
-        return;
+    selDim.innerHTML = '';
+    selMet.innerHTML = '';
 
-    const columnas =
-        Object.keys(datosExcel[0]);
-
-    const dimension =
-        document.getElementById(
-            "dimension"
-        );
-
-    const metrica =
-        document.getElementById(
-            "metrica"
-        );
-
-    if (!dimension || !metrica)
-        return;
-
-    dimension.innerHTML = "";
-
-    metrica.innerHTML = "";
+    // Determinar columnas numéricas vs texto
+    const metricasCandidatas = [];
+    const dimensionesCandidatas = [];
 
     columnas.forEach(col => {
+      const valoresMuestra = datos.slice(0, 30).map(d => d[col]);
+      const esNumerica = valoresMuestra.some(v => v !== '' && !isNaN(Number(v)));
 
-        dimension.innerHTML += `
-            <option value="${col}">
-                ${col}
-            </option>
-        `;
+      if (esNumerica) metricasCandidatas.push(col);
+      dimensionesCandidatas.push(col);
 
-        metrica.innerHTML += `
-            <option value="${col}">
-                ${col}
-            </option>
-        `;
-
+      selDim.innerHTML += `<option value="${col}">${col}</option>`;
+      selMet.innerHTML += `<option value="${col}">${col}</option>`;
     });
 
-}
+    if (metricasCandidatas.length > 0) {
+      selMet.value = metricasCandidatas[0];
+    }
 
-// =========================
-// GENERAR DASHBOARD
-// =========================
+    // Configurar filtros dinámicos con las dos primeras dimensiones
+    if (dimensionesCandidatas.length >= 1 && selF1 && lblF1) {
+      const col1 = dimensionesCandidatas[0];
+      lblF1.textContent = col1;
+      poblarValoresFiltro(selF1, col1, datos);
+    }
+    if (dimensionesCandidatas.length >= 2 && selF2 && lblF2) {
+      const col2 = dimensionesCandidatas[1];
+      lblF2.textContent = col2;
+      poblarValoresFiltro(selF2, col2, datos);
+    }
+  }
 
-function generarDashboard() {
+  function poblarValoresFiltro(selectElement, columna, datos) {
+    const unicos = [...new Set(datos.map(d => String(d[columna] || '').trim()).filter(Boolean))].slice(0, 50);
+    selectElement.innerHTML = `<option value="">(Todos)</option>` + unicos.map(v => `<option value="${v}">${v}</option>`).join('');
+  }
 
-    if (!datosExcel.length)
-        return;
+  // ==================================================================
+  // 3. GENERACIÓN DE DASHBOARD & GRÁFICOS
+  // ==================================================================
+  function generarDashboardCompleto() {
+    if (!datosExcelFiltrados.length) return;
 
-    const dimension =
-        document.getElementById(
-            "dimension"
-        )?.value;
+    const dim = $('dimension')?.value;
+    const met = $('metrica')?.value;
+    const tipo = $('tipoGrafico')?.value || 'bar';
 
-    const metrica =
-        document.getElementById(
-            "metrica"
-        )?.value;
+    if (!dim || !met) return;
 
-    const tipo =
-        document.getElementById(
-            "tipoGrafico"
-        )?.value || "bar";
+    // Agrupar datos por dimensión
+    const acumulador = {};
+    let totalMetrica = 0;
+    let maxValor = -Infinity;
+    let contadorRegistros = datosExcelFiltrados.length;
 
-    if (!dimension || !metrica)
-        return;
+    datosExcelFiltrados.forEach(row => {
+      const key = String(row[dim] || 'Sin especificar').trim();
+      const val = Number(row[met]) || (row[met] !== '' ? 1 : 0);
 
-    const agrupado = {};
+      acumulador[key] = (acumulador[key] || 0) + val;
+      totalMetrica += val;
+      if (val > maxValor) maxValor = val;
+    });
 
-    datosExcel.forEach(fila => {
+    const etiquetas = Object.keys(acumulador);
+    const valores = Object.values(acumulador);
+    const promedio = contadorRegistros > 0 ? (totalMetrica / contadorRegistros) : 0;
 
-        const grupo =
-            fila[dimension];
+    // Actualizar KPIs
+    if ($('kpiRegistros')) $('kpiRegistros').innerText = contadorRegistros.toLocaleString();
+    if ($('kpiTotal')) $('kpiTotal').innerText = totalMetrica.toLocaleString();
+    if ($('kpiPromedio')) $('kpiPromedio').innerText = promedio.toLocaleString('es-CO', { maximumFractionDigits: 1 });
+    if ($('kpiMaximo')) $('kpiMaximo').innerText = (maxValor === -Infinity ? 0 : maxValor).toLocaleString();
 
-        const valor =
-            Number(
-                fila[metrica]
-            ) || 0;
+    // 1. Gráfico Principal
+    crearGraficoPrincipal(etiquetas, valores, met, tipo);
 
-        if (!agrupado[grupo]) {
+    // 2. Gráfico Top 10
+    const pares = etiquetas.map((e, idx) => ({ etiqueta: e, valor: valores[idx] }));
+    pares.sort((a, b) => b.valor - a.valor);
+    const top10 = pares.slice(0, 10);
+    crearGraficoTop(top10.map(t => t.etiqueta), top10.map(t => t.valor), met);
 
-            agrupado[grupo] = 0;
+    // 3. Gráfico de Tendencia
+    crearGraficoLinea(etiquetas.slice(0, 20), valores.slice(0, 20), met);
+  }
 
+  function crearGraficoPrincipal(labels, data, labelName, type) {
+    const canvas = $('graficoPrincipal');
+    if (!canvas || !window.Chart) return;
+    if (chartPrincipal) chartPrincipal.destroy();
+
+    const colores = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#f97316'];
+
+    chartPrincipal = new window.Chart(canvas, {
+      type: type,
+      data: {
+        labels: labels,
+        datasets: [{
+          label: labelName,
+          data: data,
+          backgroundColor: type === 'line' ? 'rgba(37, 99, 235, 0.15)' : colores,
+          borderColor: '#2563eb',
+          borderWidth: 2,
+          fill: type === 'line',
+          tension: 0.35
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { display: ['pie', 'doughnut'].includes(type), position: 'bottom' }
         }
+      }
+    });
+  }
 
-        agrupado[grupo] += valor;
+  function crearGraficoTop(labels, data, labelName) {
+    const canvas = $('graficoTop');
+    if (!canvas || !window.Chart) return;
+    if (chartTop) chartTop.destroy();
 
+    chartTop = new window.Chart(canvas, {
+      type: 'bar',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: `Top ${labelName}`,
+          data: data,
+          backgroundColor: '#10b981',
+          borderRadius: 6
+        }]
+      },
+      options: {
+        indexAxis: 'y',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } }
+      }
+    });
+  }
+
+  function crearGraficoLinea(labels, data, labelName) {
+    const canvas = $('graficoLinea');
+    if (!canvas || !window.Chart) return;
+    if (chartLinea) chartLinea.destroy();
+
+    chartLinea = new window.Chart(canvas, {
+      type: 'line',
+      data: {
+        labels: labels,
+        datasets: [{
+          label: `Evolución ${labelName}`,
+          data: data,
+          borderColor: '#f59e0b',
+          backgroundColor: 'rgba(245, 158, 11, 0.1)',
+          fill: true,
+          tension: 0.35
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { display: false } }
+      }
+    });
+  }
+
+  // ==================================================================
+  // 4. FILTROS DINÁMICOS
+  // ==================================================================
+  function aplicarFiltros() {
+    const col1 = $('labelFiltro1')?.textContent;
+    const col2 = $('labelFiltro2')?.textContent;
+    const val1 = $('filtroColumna1')?.value;
+    const val2 = $('filtroColumna2')?.value;
+
+    datosExcelFiltrados = datosExcelOriginales.filter(row => {
+      let cumple1 = true;
+      let cumple2 = true;
+
+      if (val1 && col1) {
+        cumple1 = String(row[col1] || '').trim() === val1;
+      }
+      if (val2 && col2) {
+        cumple2 = String(row[col2] || '').trim() === val2;
+      }
+
+      return cumple1 && cumple2;
     });
 
-    const labels =
-        Object.keys(agrupado);
+    generarDashboardCompleto();
+    renderizarTablaBI(datosExcelFiltrados);
+    notificar(`Filtros aplicados: ${datosExcelFiltrados.length} registros resultantes.`, 'info');
+  }
 
-    const valores =
-        Object.values(agrupado);
+  function resetearFiltros() {
+    if ($('filtroColumna1')) $('filtroColumna1').value = '';
+    if ($('filtroColumna2')) $('filtroColumna2').value = '';
+    datosExcelFiltrados = [...datosExcelOriginales];
+    generarDashboardCompleto();
+    renderizarTablaBI(datosExcelFiltrados);
+  }
 
-    actualizarKPIs(valores);
+  // ==================================================================
+  // 5. TABLA DE DATOS
+  // ==================================================================
+  function renderizarTablaBI(datos) {
+    const tabla = $('tablaBI');
+    if (!tabla || !datos.length) return;
 
-    crearGrafico(
-        labels,
-        valores,
-        metrica,
-        tipo
-    );
-
-}
-
-// =========================
-// KPI
-// =========================
-
-function actualizarKPIs(valores) {
-
-    const registros =
-        document.getElementById(
-            "kpiRegistros"
-        );
-
-    const total =
-        document.getElementById(
-            "kpiTotal"
-        );
-
-    if (registros) {
-
-        registros.textContent =
-            datosExcel.length
-            .toLocaleString();
-
+    if (dataTableInstancia) {
+      dataTableInstancia.destroy();
+      tabla.innerHTML = '';
     }
 
-    if (total) {
+    const columnas = Object.keys(datos[0]).map(c => ({ title: c, data: c }));
 
-        total.textContent =
-            valores
-            .reduce(
-                (a, b) => a + b,
-                0
-            )
-            .toLocaleString();
-
+    if (window.jQuery && window.jQuery.fn.DataTable) {
+      dataTableInstancia = window.jQuery(tabla).DataTable({
+        data: datos,
+        columns: columnas,
+        pageLength: 10,
+        responsive: true,
+        destroy: true,
+        language: {
+          search: "Buscar:",
+          lengthMenu: "Mostrar _MENU_ filas",
+          info: "Mostrando _START_ a _END_ de _TOTAL_ registros",
+          paginate: { first: "«", previous: "‹", next: "›", last: "»" },
+          emptyTable: "Sin datos disponibles"
+        }
+      });
     }
+  }
 
-}
-
-// =========================
-// GRAFICO
-// =========================
-
-function crearGrafico(
-    labels,
-    valores,
-    titulo,
-    tipo
-) {
-
-    const canvas =
-        document.getElementById(
-            "graficoBI"
-        );
-
-    if (!canvas)
-        return;
-
-    if (grafico) {
-
-        grafico.destroy();
-
+  // ==================================================================
+  // 6. EVENTOS
+  // ==================================================================
+  document.addEventListener('change', function (e) {
+    if (e.target && e.target.id === 'excelBI') {
+      leerExcel(e);
     }
+  });
 
-    grafico =
-        new Chart(canvas, {
-
-            type: tipo,
-
-            data: {
-
-                labels: labels,
-
-                datasets: [{
-
-                    label: titulo,
-
-                    data: valores,
-
-                    borderWidth: 2,
-
-                    fill: false
-
-                }]
-
-            },
-
-            options: {
-
-                responsive: true,
-
-                maintainAspectRatio: false,
-
-                plugins: {
-
-                    legend: {
-
-                        display: true
-
-                    }
-
-                }
-
-            }
-
-        });
-
-}
-
+  document.addEventListener('click', function (e) {
+    if (e.target && e.target.id === 'btnGenerar') {
+      e.preventDefault();
+      generarDashboardCompleto();
+    }
+    if (e.target && e.target.id === 'btnAplicar') {
+      e.preventDefault();
+      aplicarFiltros();
+    }
+    if (e.target && e.target.id === 'btnResetFiltros') {
+      e.preventDefault();
+      resetearFiltros();
+    }
+  });
 })();

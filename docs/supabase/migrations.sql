@@ -345,3 +345,4 @@ SET ver = true, crear = true, editar = true, eliminar = true;
 
 INSERT INTO public.historial (usuario, accion, modulo, descripcion)
 VALUES ('admin', 'INICIALIZACIÓN', 'sistema', 'Inicialización de esquema maestro, seguridad RLS y canales Realtime.');
+

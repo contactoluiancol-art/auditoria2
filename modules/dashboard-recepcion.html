@@ -2,219 +2,193 @@
 <html lang="es">
 
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: https: blob:; connect-src 'self' https://*.supabase.co wss://*.supabase.co;">
 
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard Ejecutivo - Recepciones Logísticas</title>
 
-<title>
-Dashboard Ejecutivo Recepciones
-</title>
+  <!-- FUENTES GOOGLE -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 
-<!-- ESTILOS -->
-<link rel="stylesheet" href="../css/dashboard-recepcion.css">
-<link rel="stylesheet" href="../css/notificaciones-premium.css">
-
+  <!-- ESTILOS -->
+  <link rel="stylesheet" href="../css/dashboard-recepcion.css">
+  <link rel="stylesheet" href="../css/notificaciones-premium.css">
 </head>
 
 <body>
 
-<div class="dashboard-page">
+<div class="dashboard-page" id="dashboardPrintArea">
 
   <!-- HEADER -->
   <header class="dashboard-header">
-
     <div class="header-left">
-      <img
-        src="../img/logo-electro.png.png"
-        alt="Electroingeniería"
-      >
+      <img src="../img/logo-electro.png.png" alt="ElectroIngeniería" class="header-logo-img">
       <div>
-        <h1>
-          Dashboard Ejecutivo
-        </h1>
-        <span>
-          Recepciones Logísticas
-        </span>
+        <h1>Dashboard Ejecutivo</h1>
+        <span>Centro de Mando & Control de Recepciones Logísticas</span>
       </div>
     </div>
 
     <div class="header-right">
-      <button
-        id="exportarPdfBtn"
-        class="btn-export"
-      >
-        📥 Exportar PDF
+      <button id="exportarPdfBtn" class="btn-export" type="button">
+        <span>📥</span> Exportar PDF
       </button>
     </div>
-
   </header>
 
-  <!-- KPI -->
+  <!-- KPIS PRIMARIOS -->
   <section class="kpi-container">
-
-    <div class="kpi-card">
-      <span>
-        📦 Recepciones
-      </span>
-      <strong id="kpiTotalRecepciones">
-        0
-      </strong>
+    <div class="kpi-card card-blue">
+      <div class="kpi-head">
+        <span>📦 Recepciones Totales</span>
+      </div>
+      <strong id="kpiTotalRecepciones">0</strong>
+      <small>Envíos registrados</small>
     </div>
 
-    <div class="kpi-card">
-      <span>
-        🟠 Faltantes
-      </span>
-      <strong id="kpiFaltantes">
-        0
-      </strong>
+    <div class="kpi-card card-orange">
+      <div class="kpi-head">
+        <span>🟠 Faltantes</span>
+      </div>
+      <strong id="kpiFaltantes">0</strong>
+      <small>Discrepancias detectadas</small>
     </div>
 
-    <div class="kpi-card">
-      <span>
-        🔵 Sobrantes
-      </span>
-      <strong id="kpiSobrantes">
-        0
-      </strong>
+    <div class="kpi-card card-blue-alt">
+      <div class="kpi-head">
+        <span>🔵 Sobrantes</span>
+      </div>
+      <strong id="kpiSobrantes">0</strong>
+      <small>Mercancía excedente</small>
     </div>
 
-    <div class="kpi-card">
-      <span>
-        🔴 Dañados
-      </span>
-      <strong id="kpiDanados">
-        0
-      </strong>
+    <div class="kpi-card card-red">
+      <div class="kpi-head">
+        <span>🔴 Dañados</span>
+      </div>
+      <strong id="kpiDanados">0</strong>
+      <small>Material averiado</small>
     </div>
-
   </section>
 
-  <!-- INDICADORES -->
+  <!-- INDICADORES ESTRATÉGICOS -->
   <div class="indicadores-grid">
-
     <div class="indicador-card">
-      <span>
-        🏆 Mes más activo
-      </span>
-      <strong id="mesMasActivo">
-        -
-      </strong>
+      <div class="ind-head">
+        <span>🏆 Mes más activo</span>
+      </div>
+      <strong id="mesMasActivo">-</strong>
+      <small id="subMesActivo">Mayor flujo de recepción</small>
     </div>
 
-    <div class="indicador-card">
-      <span>
-        ⚠️ Mes más crítico
-      </span>
-      <strong id="mesMasCritico">
-        -
-      </strong>
+    <div class="indicador-card ind-warning">
+      <div class="ind-head">
+        <span>⚠️ Mes más crítico</span>
+      </div>
+      <strong id="mesMasCritico">-</strong>
+      <small id="subMesCritico">Mayor volumen de novedades</small>
     </div>
 
-    <div class="indicador-card">
-      <span>
-        🟢 Salud Operativa
-      </span>
-      <strong id="saludOperativa">
-        100%
-      </strong>
+    <div class="indicador-card ind-success">
+      <div class="ind-head">
+        <span>🟢 Salud Operativa</span>
+      </div>
+      <strong id="saludOperativa">100%</strong>
+      <small>Índice de conformidad</small>
     </div>
-
   </div>
 
-  <!-- GRAFICAS -->
+  <!-- GRÁFICAS PRINCIPALES -->
   <div class="charts-grid">
-
     <div class="dashboard-card">
-      <h2>
-        📈 Recepciones por Mes
-      </h2>
-      <canvas id="graficoRecepciones"></canvas>
+      <h2>📈 Recepciones por Mes</h2>
+      <div class="chart-wrapper">
+        <canvas id="graficoRecepciones"></canvas>
+      </div>
     </div>
 
     <div class="dashboard-card">
-      <h2>
-        📊 Distribución Novedades
-      </h2>
-      <canvas id="graficoNovedades"></canvas>
+      <h2>📊 Distribución de Novedades</h2>
+      <div class="chart-wrapper">
+        <canvas id="graficoNovedades"></canvas>
+      </div>
     </div>
-
   </div>
   
-  <!-- NUEVA GRAFICA -->
-  <div class="dashboard-card">
-    <h2>
-      📉 Tendencia de Novedades
-    </h2>
-    <canvas id="graficoTendenciaNovedades"></canvas>
+  <!-- GRÁFICA DE TENDENCIA -->
+  <div class="dashboard-card" style="margin-bottom: 22px;">
+    <h2>📉 Tendencia Histórica de Discrepancias</h2>
+    <div class="chart-wrapper-large">
+      <canvas id="graficoTendenciaNovedades"></canvas>
+    </div>
   </div>
 
-  <!-- TOPS -->
+  <!-- TOPS ANALYTICS -->
   <div class="analytics-grid">
-
     <div class="dashboard-card">
-      <h2>
-        🏭 Top Proveedores con Novedades
-      </h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Proveedor</th>
-            <th>Casos</th>
-          </tr>
-        </thead>
-        <tbody id="topProveedoresBody"></tbody>
-      </table>
+      <h2>🏭 Top Proveedores con Novedades</h2>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Proveedor</th>
+              <th style="text-align:right;">Casos / Novedades</th>
+            </tr>
+          </thead>
+          <tbody id="topProveedoresBody"></tbody>
+        </table>
+      </div>
     </div>
 
     <div class="dashboard-card">
-      <h2>
-        📦 Materiales Críticos
-      </h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Material</th>
-            <th>Casos</th>
-          </tr>
-        </thead>
-        <tbody id="topMaterialesBody"></tbody>
-      </table>
+      <h2>📦 Materiales Críticos</h2>
+      <div class="table-responsive">
+        <table>
+          <thead>
+            <tr>
+              <th>Material / Referencia</th>
+              <th style="text-align:right;">Incidencias</th>
+            </tr>
+          </thead>
+          <tbody id="topMaterialesBody"></tbody>
+        </table>
+      </div>
     </div>
-
   </div>
 
-  <!-- CONSOLIDADO -->
+  <!-- CONSOLIDADO MENSUAL -->
   <section class="dashboard-card">
-
-    <h2>
-      📋 Consolidado Mensual
-    </h2>
-
-    <table>
-      <thead>
-        <tr>
-          <th>Mes</th>
-          <th>Recepciones</th>
-          <th>Faltantes</th>
-          <th>Sobrantes</th>
-          <th>Dañados</th>
-          <th>Total</th>
-        </tr>
-      </thead>
-      <tbody id="dashboardRecepcionBody"></tbody>
-    </table>
-
+    <h2>📋 Consolidado Mensual Ejecutivo</h2>
+    <div class="table-responsive">
+      <table class="table-consolidado">
+        <thead>
+          <tr>
+            <th>Mes</th>
+            <th>Recepciones</th>
+            <th>Faltantes</th>
+            <th>Sobrantes</th>
+            <th>Dañados</th>
+            <th>Total Novedades</th>
+          </tr>
+        </thead>
+        <tbody id="dashboardRecepcionBody"></tbody>
+      </table>
+    </div>
   </section>
 
 </div>
 
-<!-- LIBRERIAS EXTERNAS (CDN) -->
+<!-- LIBRERÍAS EXTERNAS (CDN) -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 
 <!-- SCRIPTS DEL SISTEMA -->
+<script src="../js/config.js"></script>
 <script src="../js/supabaseClient.js"></script>
 <script src="../js/notificaciones.js"></script>
 <script src="../js/dashboard-recepcion.js"></script>

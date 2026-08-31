@@ -1,2356 +1,861 @@
+/**
+ * ====================================================================
+ * RECEPCION.JS — Módulo de Recepción Logística & Gestión de Compras
+ * ====================================================================
+ * Versión: 2.7.0
+ */
 
+(function () {
+  'use strict';
 
-// ======================
-// VARIABLES GLOBALES
-// ======================
-
-window.refreshRecepcion = null;
-
-window.recepcionGestionando = null;
-
-var adjuntosCommonRecepcion = window.AdjuntosCommon;
-var soportesRecepcionSeleccionados = [];
-window.recepcionesCacheSoportes = {};
-window.recepcionSoportesModalId = null;
-
-function notificarAdjuntosRecepcion(mensaje) {
-  if (typeof window.mostrarNotificacion === 'function') {
-    window.mostrarNotificacion('Soportes de recepción', mensaje, 'warning');
-  } else if (typeof notifAlert === 'function') {
-    notifAlert(mensaje);
-  } else {
-    alert(mensaje);
-  }
-}
-
-function totalSoportesRecepcion() {
-  return soportesRecepcionSeleccionados.length;
-}
-
-function agregarArchivosRecepcion(archivos) {
-  if (!adjuntosCommonRecepcion) {
-    notificarAdjuntosRecepcion('No cargó el componente común de adjuntos.');
-    return;
+  // 1. Limpieza de intervalos previos
+  if (window.refreshRecepcionInterval) {
+    clearInterval(window.refreshRecepcionInterval);
   }
 
-  for (const archivo of Array.from(archivos || [])) {
-    if (totalSoportesRecepcion() >= adjuntosCommonRecepcion.MAX_ADJUNTOS) {
-      notificarAdjuntosRecepcion('Solo puede agregar hasta 10 soportes por recepción.');
-      break;
-    }
+  // 2. Estado Interno
+  const adjuntosCommon = window.AdjuntosCommon;
+  let soportesSeleccionados = [];
+  window.recepcionesCacheSoportes = {};
+  window.recepcionesCacheDatos = [];
+  window.recepcionGestionando = null;
+  window.recepcionSoportesModalId = null;
 
-    const validacion = adjuntosCommonRecepcion.validarArchivo(archivo);
-    if (!validacion.valido) {
-      notificarAdjuntosRecepcion(validacion.mensaje);
-      continue;
-    }
+  // 3. Utilidades
+  function $(id) {
+    return document.getElementById(id);
+  }
 
-    const duplicado = soportesRecepcionSeleccionados.some(function (item) {
-      return item.tipo === 'archivo' &&
-        item.archivo.name === archivo.name &&
-        item.archivo.size === archivo.size &&
-        item.archivo.lastModified === archivo.lastModified;
-    });
+  function getVal(id) {
+    const el = $(id);
+    return el ? el.value : '';
+  }
 
-    if (!duplicado) {
-      soportesRecepcionSeleccionados.push({
-        tipo: 'archivo',
-        archivo: archivo,
-        nombre: archivo.name,
-        mime: archivo.type || '',
-        tamano: archivo.size
-      });
+  function setVal(id, val) {
+    const el = $(id);
+    if (el) el.value = val ?? '';
+  }
+
+  function sanitize(str) {
+    return String(str || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;');
+  }
+
+  function notificar(mensaje, tipo = 'warning') {
+    if (typeof window.mostrarNotificacion === 'function') {
+      window.mostrarNotificacion('Recepción', mensaje, tipo);
+    } else if (typeof window.notifAlert === 'function') {
+      window.notifAlert(mensaje);
     }
   }
 
-  renderSoportesRecepcionTemporales();
-}
-
-function agregarDriveRecepcion() {
-  const input = document.getElementById('driveLinkRecepcion');
-  if (!input || !adjuntosCommonRecepcion) return;
-
-  if (totalSoportesRecepcion() >= adjuntosCommonRecepcion.MAX_ADJUNTOS) {
-    notificarAdjuntosRecepcion('Solo puede agregar hasta 10 soportes por recepción.');
-    return;
-  }
-
-  const url = adjuntosCommonRecepcion.normalizarDriveUrl(input.value);
-  if (!url) {
-    notificarAdjuntosRecepcion('Pegue un enlace válido de Google Drive o Google Docs que comience por https://.');
-    return;
-  }
-
-  if (soportesRecepcionSeleccionados.some(function (item) { return item.url === url; })) {
-    notificarAdjuntosRecepcion('Ese enlace de Drive ya fue agregado.');
-    return;
-  }
-
-  soportesRecepcionSeleccionados.push({
-    tipo: 'drive',
-    nombre: adjuntosCommonRecepcion.nombreEnlaceDrive(url, totalSoportesRecepcion() + 1),
-    url: url,
-    mime: 'text/uri-list',
-    tamano: 0
-  });
-
-  input.value = '';
-  renderSoportesRecepcionTemporales();
-}
-
-function renderSoportesRecepcionTemporales() {
-  const lista = document.getElementById('listaSoportesRecepcion');
-  const contador = document.getElementById('contadorSoportesRecepcion');
-  if (!lista || !adjuntosCommonRecepcion) return;
-
-  if (contador) {
-    contador.textContent = `${totalSoportesRecepcion()} / ${adjuntosCommonRecepcion.MAX_ADJUNTOS}`;
-  }
-
-  if (soportesRecepcionSeleccionados.length === 0) {
-    lista.innerHTML = '<div class="adjunto-vacio">Aún no se han agregado soportes.</div>';
-    return;
-  }
-
-  lista.innerHTML = soportesRecepcionSeleccionados.map(function (soporte, index) {
-    const visual = adjuntosCommonRecepcion.tipoVisual(soporte);
-    const meta = soporte.tipo === 'drive'
-      ? visual.etiqueta
-      : `${visual.etiqueta} · ${adjuntosCommonRecepcion.formatearTamano(soporte.tamano)}`;
-
-    return `
-      <div class="adjunto-item">
-        <div class="adjunto-item__info">
-          <span class="adjunto-item__icono">${visual.icono}</span>
-          <div class="adjunto-item__texto">
-            <span class="adjunto-item__nombre">${adjuntosCommonRecepcion.escaparHTML(soporte.nombre)}</span>
-            <span class="adjunto-item__meta">${adjuntosCommonRecepcion.escaparHTML(meta)}</span>
-          </div>
-        </div>
-        <div class="adjunto-item__acciones">
-          <button type="button" class="adjunto-btn adjunto-btn--eliminar" onclick="eliminarSoporteRecepcionTemporal(${index})">Quitar</button>
-        </div>
-      </div>`;
-  }).join('');
-}
-
-window.eliminarSoporteRecepcionTemporal = function (index) {
-  soportesRecepcionSeleccionados.splice(Number(index), 1);
-  renderSoportesRecepcionTemporales();
-};
-
-async function limpiarArchivosSubidosRecepcion(rutas) {
-  if (!rutas || rutas.length === 0) return;
-  try {
-    await window.supabaseClient.storage.from('recepciones-pdf').remove(rutas);
-  } catch (error) {
-    console.warn('No fue posible limpiar archivos huérfanos de recepción:', error);
-  }
-}
-
-async function subirSoportesRecepcion(listaSoportes = soportesRecepcionSeleccionados) {
-  const soportesGuardados = [];
-  const rutasSubidas = [];
-
-  for (const soporte of listaSoportes) {
-    if (soporte.tipo === 'drive') {
-      soportesGuardados.push({
-        tipo: 'drive',
-        nombre: soporte.nombre,
-        url: soporte.url,
-        ruta: '',
-        mime: 'text/uri-list',
-        tamano: 0
-      });
-      continue;
+  // 4. Modales
+  window.abrirModal = function (id) {
+    const m = $(id);
+    if (m) {
+      m.classList.add('active');
+      m.style.display = 'flex';
     }
-
-    const archivo = soporte.archivo;
-    const limpio = String(archivo.name || 'soporte')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-zA-Z0-9._-]/g, '_');
-    const identificador = window.crypto?.randomUUID
-      ? window.crypto.randomUUID()
-      : `${Date.now()}_${Math.random().toString(16).slice(2)}`;
-    const ruta = `recepciones/${identificador}_${limpio}`;
-
-    const subida = await window.supabaseClient
-      .storage
-      .from('recepciones-pdf')
-      .upload(ruta, archivo, { upsert: false, contentType: archivo.type || undefined });
-
-    if (subida.error) {
-      await limpiarArchivosSubidosRecepcion(rutasSubidas);
-      throw new Error(`No se pudo subir “${archivo.name}”: ${subida.error.message}`);
-    }
-
-    rutasSubidas.push(ruta);
-
-    const urlData = window.supabaseClient
-      .storage
-      .from('recepciones-pdf')
-      .getPublicUrl(ruta);
-
-    soportesGuardados.push({
-      tipo: 'archivo',
-      nombre: archivo.name,
-      url: urlData.data.publicUrl,
-      ruta: ruta,
-      mime: archivo.type || '',
-      tamano: archivo.size
-    });
-  }
-
-  return { soportesGuardados, rutasSubidas };
-}
-
-function puedeGestionarSoportesRecepcion() {
-  const usuario = String(window.usuarioLogueado?.usuario || '').toLowerCase();
-  const rol = String(window.usuarioLogueado?.rol || '').toLowerCase();
-  const rolPermitido = ['admin', 'auditor', 'lider', 'compras'].includes(usuario) ||
-    ['admin', 'auditor', 'lider', 'compras'].includes(rol);
-  const permiso = typeof window.tienePermiso === 'function' &&
-    (window.tienePermiso('recepcion', 'crear') || window.tienePermiso('recepcion', 'editar'));
-  return Boolean(rolPermitido || permiso);
-}
-
-async function consultarSoportesRecepcion(id) {
-  const consulta = await window.supabaseClient
-    .from('recepciones')
-    .select('pdf_url')
-    .eq('id', Number(id))
-    .single();
-
-  if (consulta.error) return { error: consulta.error, soportes: [] };
-  return {
-    error: null,
-    soportes: adjuntosCommonRecepcion.deserializarRecepcion(consulta.data?.pdf_url)
   };
-}
 
-async function agregarSoportesRecepcionExistente(nuevos) {
-  const id = Number(window.recepcionSoportesModalId);
-  if (!id || !nuevos.length || !adjuntosCommonRecepcion) return;
-  if (!puedeGestionarSoportesRecepcion()) {
-    notificarAdjuntosRecepcion('No tiene permisos para agregar soportes a esta recepción.');
-    return;
-  }
-
-  const consulta = await consultarSoportesRecepcion(id);
-  if (consulta.error) {
-    notificarAdjuntosRecepcion('No fue posible consultar los soportes actuales: ' + consulta.error.message);
-    return;
-  }
-
-  const actuales = consulta.soportes;
-  const nuevosSinDuplicar = nuevos.filter(function (nuevo) {
-    return !(nuevo.tipo === 'drive' && actuales.some(function (actual) { return actual.url === nuevo.url; }));
-  });
-
-  if (actuales.length + nuevosSinDuplicar.length > adjuntosCommonRecepcion.MAX_ADJUNTOS) {
-    notificarAdjuntosRecepcion(`La recepción ya tiene ${actuales.length} soportes. El máximo permitido es 10.`);
-    return;
-  }
-  if (!nuevosSinDuplicar.length) {
-    notificarAdjuntosRecepcion('Los enlaces seleccionados ya estaban registrados.');
-    return;
-  }
-
-  let carga;
-  try {
-    carga = await subirSoportesRecepcion(nuevosSinDuplicar);
-  } catch (error) {
-    notificarAdjuntosRecepcion(error.message || 'No fue posible subir los soportes.');
-    return;
-  }
-
-  const combinados = actuales.concat(carga.soportesGuardados);
-  const actualizacion = await window.supabaseClient
-    .from('recepciones')
-    .update({ pdf_url: adjuntosCommonRecepcion.serializarRecepcion(combinados) })
-    .eq('id', id);
-
-  if (actualizacion.error) {
-    await limpiarArchivosSubidosRecepcion(carga.rutasSubidas);
-    notificarAdjuntosRecepcion('No fue posible actualizar la recepción: ' + actualizacion.error.message);
-    return;
-  }
-
-  if (typeof window.crearNotificacion === 'function') {
-    window.crearNotificacion(`📎 Se agregaron ${nuevosSinDuplicar.length} soporte(s) a la recepción #${id}.`);
-  }
-
-  await window.renderRecepciones();
-  window.verSoportesRecepcion(id);
-}
-
-async function cargarArchivosRecepcionModal(archivos) {
-  const actuales = window.recepcionesCacheSoportes[window.recepcionSoportesModalId] || [];
-  const disponibles = adjuntosCommonRecepcion.MAX_ADJUNTOS - actuales.length;
-  const nuevos = [];
-
-  for (const archivo of Array.from(archivos || [])) {
-    if (nuevos.length >= disponibles) {
-      notificarAdjuntosRecepcion(`Solo puede agregar ${Math.max(disponibles, 0)} soporte(s) más.`);
-      break;
+  window.cerrarModal = function (id) {
+    const m = $(id);
+    if (m) {
+      m.classList.remove('active');
+      m.style.display = 'none';
     }
-    const validacion = adjuntosCommonRecepcion.validarArchivo(archivo);
-    if (!validacion.valido) {
-      notificarAdjuntosRecepcion(validacion.mensaje);
-      continue;
-    }
-    nuevos.push({
-      tipo: 'archivo',
-      archivo,
-      nombre: archivo.name,
-      mime: archivo.type || '',
-      tamano: archivo.size
-    });
-  }
-
-  await agregarSoportesRecepcionExistente(nuevos);
-}
-
-async function cargarDriveRecepcionModal() {
-  const input = document.getElementById('driveLinkRecepcionModal');
-  if (!input || !adjuntosCommonRecepcion) return;
-
-  const url = adjuntosCommonRecepcion.normalizarDriveUrl(input.value);
-  if (!url) {
-    notificarAdjuntosRecepcion('Pegue un enlace válido de Google Drive o Google Docs que comience por https://.');
-    return;
-  }
-
-  const actuales = window.recepcionesCacheSoportes[window.recepcionSoportesModalId] || [];
-  const nuevo = {
-    tipo: 'drive',
-    nombre: adjuntosCommonRecepcion.nombreEnlaceDrive(url, actuales.length + 1),
-    url,
-    mime: 'text/uri-list',
-    tamano: 0
   };
-  input.value = '';
-  await agregarSoportesRecepcionExistente([nuevo]);
-}
 
-window.eliminarSoporteRecepcionGuardado = async function (index) {
-  const id = Number(window.recepcionSoportesModalId);
-  if (!id || !adjuntosCommonRecepcion) return;
-  if (!puedeGestionarSoportesRecepcion()) {
-    notificarAdjuntosRecepcion('No tiene permisos para eliminar soportes.');
-    return;
-  }
-
-  const consulta = await consultarSoportesRecepcion(id);
-  if (consulta.error) {
-    notificarAdjuntosRecepcion('No fue posible consultar los soportes: ' + consulta.error.message);
-    return;
-  }
-
-  if (consulta.soportes.length <= adjuntosCommonRecepcion.MIN_ADJUNTOS) {
-    notificarAdjuntosRecepcion('La recepción debe conservar mínimo un soporte.');
-    return;
-  }
-
-  const soporte = consulta.soportes[Number(index)];
-  if (!soporte) return;
-
-  const confirmar = window.Notif && typeof window.Notif.confirm === 'function'
-    ? await window.Notif.confirm('El soporte se eliminará del registro.', '¿Eliminar soporte?')
-    : window.confirm('¿Eliminar soporte?');
-  if (!confirmar) return;
-
-  const restantes = consulta.soportes.filter(function (_, i) { return i !== Number(index); });
-  const actualizacion = await window.supabaseClient
-    .from('recepciones')
-    .update({ pdf_url: adjuntosCommonRecepcion.serializarRecepcion(restantes) })
-    .eq('id', id);
-
-  if (actualizacion.error) {
-    notificarAdjuntosRecepcion('No fue posible actualizar la recepción: ' + actualizacion.error.message);
-    return;
-  }
-
-  if (soporte.tipo === 'archivo' && soporte.ruta) {
-    const limpieza = await window.supabaseClient.storage.from('recepciones-pdf').remove([soporte.ruta]);
-    if (limpieza.error) console.warn('No se pudo eliminar el archivo físico:', limpieza.error);
-  }
-
-  if (typeof window.crearNotificacion === 'function') {
-    window.crearNotificacion(`🗑️ Se eliminó un soporte de la recepción #${id}.`);
-  }
-
-  await window.renderRecepciones();
-  window.verSoportesRecepcion(id);
-};
-
-function inicializarAdjuntosRecepcion() {
-  const inputArchivos = document.getElementById('pdfInput');
-  const btnArchivos = document.getElementById('btnAgregarSoportesRecepcion');
-  const btnDrive = document.getElementById('btnAgregarDriveRecepcion');
-  const inputDrive = document.getElementById('driveLinkRecepcion');
-
-  if (btnArchivos && inputArchivos) {
-    btnArchivos.onclick = function () { inputArchivos.click(); };
-    inputArchivos.onchange = function (evento) {
-      agregarArchivosRecepcion(evento.target.files);
-      evento.target.value = '';
-    };
-  }
-
-  if (btnDrive) btnDrive.onclick = agregarDriveRecepcion;
-  if (inputDrive) {
-    inputDrive.onkeydown = function (evento) {
-      if (evento.key === 'Enter') {
-        evento.preventDefault();
-        agregarDriveRecepcion();
-      }
-    };
-  }
-
-  const inputModal = document.getElementById('actualizarSoportesRecepcionInput');
-  const btnArchivosModal = document.getElementById('btnAgregarArchivosRecepcionModal');
-  const btnDriveModal = document.getElementById('btnAgregarDriveRecepcionModal');
-  const inputDriveModal = document.getElementById('driveLinkRecepcionModal');
-
-  if (btnArchivosModal && inputModal) {
-    btnArchivosModal.onclick = function () { inputModal.click(); };
-    inputModal.onchange = async function (evento) {
-      await cargarArchivosRecepcionModal(evento.target.files);
-      evento.target.value = '';
-    };
-  }
-  if (btnDriveModal) btnDriveModal.onclick = cargarDriveRecepcionModal;
-  if (inputDriveModal) {
-    inputDriveModal.onkeydown = function (evento) {
-      if (evento.key === 'Enter') {
-        evento.preventDefault();
-        cargarDriveRecepcionModal();
-      }
-    };
-  }
-
-  renderSoportesRecepcionTemporales();
-}
-
-
-
-// ======================
-// BOTON GUARDAR
-// ======================
-
-window.guardarRecepcionBtn =
-document.getElementById(
-  'guardarRecepcion'
-);
-// ======================
-// EVENTO BOTON
-// ======================
-
-if(window.guardarRecepcionBtn){
-
- window.guardarRecepcionBtn.addEventListener(
-
-    'click',
-
-    guardarRecepcion
-
-  );
-
-}
-
-// ======================
-// CREAR NOTIFICACION
-// ======================
-
-window.crearNotificacion = function(mensaje){
-
-  try{
-
-    let notificaciones =
-
-    JSON.parse(
-
-      localStorage.getItem(
-        'notificaciones'
-      )
-
-    ) || [];
-
-
-
-
-
-    const nuevaNotificacion = {
-
-      id:
-      Date.now(),
-
-      mensaje:
-      mensaje,
-
-      leida:
-      false,
-
-      fecha:
-      new Date()
-      .toLocaleString('es-CO')
-
-    };
-
-
-
-
-
-    notificaciones.unshift(
-      nuevaNotificacion
-    );
-
-
-
-
-
-    localStorage.setItem(
-
-      'notificaciones',
-
-      JSON.stringify(
-        notificaciones
-      )
-
-    );
-
-
-
-
-
-    const contador =
-
-    document.getElementById(
-      'contadorNotificaciones'
-    );
-
-
-
-
-
-    if(contador){
-
-      contador.innerText =
-      notificaciones.length;
-
+  window.cerrarModalGestion = () => window.cerrarModal('modalGestion');
+  window.cerrarModalObservacion = () => window.cerrarModal('modalObservacion');
+  window.cerrarModalSoportesRecepcion = () => window.cerrarModal('modalSoportesRecepcion');
+
+  // 5. Cálculo Dinámico de % Revisado
+  function calcularPorcentajeEnVivo() {
+    const cant = Number(getVal('cantidadInput')) || 0;
+    const rev = Number(getVal('revisadasInput')) || 0;
+    if (cant > 0 && rev >= 0) {
+      const pct = Math.min((rev / cant) * 100, 100).toFixed(1);
+      const kpi = $('kpiRevisado');
+      if (kpi) kpi.innerText = `${pct}%`;
     }
+  }
 
+  // 6. Gestión de Soportes en Creación
+  function totalSoportes() {
+    return soportesSeleccionados.length;
+  }
 
+  function agregarArchivos(archivos) {
+    const max = adjuntosCommon?.MAX_ADJUNTOS || 10;
 
+    for (const archivo of Array.from(archivos || [])) {
+      if (totalSoportes() >= max) {
+        notificar(`Límite alcanzado: Máximo ${max} soportes.`);
+        break;
+      }
 
-
-    if(
-
-      typeof window.renderNotificaciones ===
-      'function'
-
-    ){
-
-      window.renderNotificaciones();
-
-    }
-
-
-
-
-
-    window.dispatchEvent(
-
-      new CustomEvent(
-
-        'nuevaNotificacion',
-
-        {
-
-          detail:
-          nuevaNotificacion
-
+      if (adjuntosCommon) {
+        const v = adjuntosCommon.validarArchivo(archivo);
+        if (!v.valido) {
+          notificar(v.mensaje);
+          continue;
         }
+      }
 
-      )
-
-    );
-
-  }
-
-  catch(error){
-
-    console.log(error);
-
-  }
-
-};
-
-
-
-
-
-// ======================
-// GUARDAR RECEPCION
-// ======================
-
-async function guardarRecepcion(){
-
-  try{
-
-    if(
-
-      !window.tienePermiso(
-        'recepcion',
-        'crear'
-      )
-
-    ){
-
-      notifAlert(
-        'No tiene permisos'
+      const dup = soportesSeleccionados.some(i =>
+        i.tipo === 'archivo' && i.archivo && i.archivo.name === archivo.name && i.archivo.size === archivo.size
       );
 
-      return;
-
+      if (!dup) {
+        soportesSeleccionados.push({
+          tipo: 'archivo',
+          archivo: archivo,
+          nombre: archivo.name,
+          mime: archivo.type || '',
+          tamano: archivo.size
+        });
+      }
     }
-    const proveedor =
-
-    document.getElementById(
-      'proveedorInput'
-    ).value.trim();
-    const material =
-
-    document.getElementById(
-      'materialInput'
-    ).value.trim();
-    const tipoRecepcion =
-
-    document.getElementById(
-      'tipoRecepcionInput'
-    ).value;
-    const cantidad =
-
-    Number(
-
-      document.getElementById(
-        'cantidadInput'
-      ).value
-
-    );
-
-    const revisadas =
-
-    Number(
-
-      document.getElementById(
-        'revisadasInput'
-      ).value
-
-    );
-
-
-
-
-
-    const novedades =
-
-    Number(
-
-      document.getElementById(
-        'novedadesInput'
-      ).value
-
-    );
-
-
-
-
-
-    const faltantes =
-
-    Number(
-
-      document.getElementById(
-        'faltantesInput'
-      ).value
-
-    );
-
-
-
-
-
-    const observacion =
-
-    document.getElementById(
-      'observacionInput'
-    ).value.trim();
-
-
-
-
-
-    const estado =
-
-    document.getElementById(
-      'estadoRecepcionInput'
-    ).value;
-
-
-
-
-
-    if(
-
-      !proveedor ||
-      !material ||
-      !cantidad ||
-      !revisadas
-
-    ){
-
-  mostrarAlerta(
-  '¡Ups! 😕',
-  'Debes completar todos los campos'
-);
-
-      return;
-
-    }
-
-    if (!adjuntosCommonRecepcion ||
-        totalSoportesRecepcion() < adjuntosCommonRecepcion.MIN_ADJUNTOS ||
-        totalSoportesRecepcion() > adjuntosCommonRecepcion.MAX_ADJUNTOS) {
-      notificarAdjuntosRecepcion('Debe agregar entre 1 y 10 soportes antes de guardar la recepción.');
-      return;
-    }
-
-
-
-    const porcentajeRevisado =
-
-    (
-      revisadas /
-      cantidad
-    ) * 100;
-
-
-
-
-
-    let pdfUrl = '';
-    let rutasSubidasRecepcion = [];
-
-    try {
-      const carga = await subirSoportesRecepcion();
-      rutasSubidasRecepcion = carga.rutasSubidas;
-      pdfUrl = adjuntosCommonRecepcion.serializarRecepcion(carga.soportesGuardados);
-    } catch (error) {
-      console.error(error);
-      notificarAdjuntosRecepcion(error.message || 'No fue posible subir los soportes.');
-      return;
-    }
-
-
-
-    // ======================
-    // INSERTAR
-    // ======================
-
-    const response =
-
-    await window.supabaseClient
-
-    .from('recepciones')
-
-    .insert([
-
-  {
-
-    proveedor:
-    proveedor,
-
-    material:
-    material,
-
-    tipo_recepcion:
-    tipoRecepcion,
-
-    cantidad:
-    cantidad,
-
-    revisadas:
-    revisadas,
-
-    novedades:
-    novedades,
-
-    faltantes:
-    faltantes,
-
-    porcentaje_revisado:
-    porcentajeRevisado.toFixed(1),
-
-    observacion:
-    observacion,
-
-    comentario_validacion:
-    '',
-
-    seguimiento:
-    '',
-
-    estado:
-    estado,
-
-    novedad_original:
-    estado,
-
-    pdf_url:
-    pdfUrl,
-
-    usuario_recepcion:
-    window.usuarioLogueado.usuario ||
-
-    'Usuario',
-
-    created_at:
-    new Date().toISOString()
-
+    renderSoportesTemporales();
   }
 
-]);
+  function agregarDrive() {
+    const input = $('driveLinkRecepcion');
+    if (!input) return;
 
-
-
-
-    if(response.error){
-
-      console.log(
-        response.error
-      );
-
-      await limpiarArchivosSubidosRecepcion(rutasSubidasRecepcion);
-
-      notifAlert(
-        'Error guardando recepción: ' + response.error.message
-      );
-
+    const max = adjuntosCommon?.MAX_ADJUNTOS || 10;
+    if (totalSoportes() >= max) {
+      notificar(`Límite alcanzado: Máximo ${max} soportes.`);
       return;
-
     }
 
-
-
-
-
-    // ======================
-    // NOTIFICACION
-    // ======================
-
-window.crearNotificacion(
-
-`📦 Nueva recepción registrada
-
-Proveedor:
-${proveedor}
-
-Material:
-${material}
-
-Tipo:
-${tipoRecepcion}
-
-Cantidad:
-${cantidad}
-
-Estado:
-${estado}`
-
-);
-
-await window.renderRecepciones();
-
-await window.actualizarKPIsRecepcion();
-
-await window.actualizarDashboardRecepcion();
-
-limpiarFormulario();
-
-notifAlert(
-  'Recepción guardada correctamente'
-);
-
-  } // ← ESTA LLAVE FALTABA
-
-  catch(error){
-
-    console.log(error);
-
-  }
-
-}
-
-
-
-
-
-// ======================
-// RENDER RECEPCIONES
-// ======================
-
-window.renderRecepciones = async function(){
-
-  try{
-
-    const body =
-
-    document.getElementById(
-      'recepcionesBody'
-    );
-
-    if(!body){
-
+    const url = adjuntosCommon ? adjuntosCommon.normalizarDriveUrl(input.value) : input.value.trim();
+    if (!url || !url.startsWith('https://')) {
+      notificar('Ingrese un enlace válido de Google Drive / Docs.');
       return;
-
     }
 
-    const response =
-
-    await window.supabaseClient
-
-    .from('recepciones')
-
-    .select('*')
-
-    .order(
-
-      'id',
-
-      {
-
-        ascending:false
-
-      }
-
-    );
-
-
-
-
-
-    if(response.error){
-
-      console.log(
-        response.error
-      );
-
+    if (soportesSeleccionados.some(i => i.url === url)) {
+      notificar('El enlace de Drive ya fue agregado.');
       return;
-
     }
 
-
-
-
-
-    const recepciones =
-    response.data || [];
-
-    window.recepcionesCacheSoportes = {};
-
-
-
-    body.innerHTML = '';
-
-
-
-
-
-    let html = '';
-
-
-const usuarioActual =
-
-window.usuarioLogueado?.usuario?.toLowerCase() || '';
-
-const puedeGestionar =
-
-usuarioActual === 'admin' ||
-usuarioActual === 'auditor' ||
-usuarioActual === 'lider' ||
-usuarioActual === 'compras';
-
-const puedeEliminar =
-
-usuarioActual === 'admin' ||
-
-usuarioActual === 'auditor';
-
-
-    recepciones.forEach(function(item){
-
-      window.recepcionesCacheSoportes[item.id] = adjuntosCommonRecepcion
-        ? adjuntosCommonRecepcion.deserializarRecepcion(item.pdf_url)
-        : [];
-
-      let estadoClass = '';
-
-
-
-
-
-      if(item.estado === 'Pendiente'){
-
-        estadoClass =
-        'estado-pendiente';
-
-      }
-
-      else if(item.estado === 'En Gestión Compras'){
-
-        estadoClass =
-        'estado-revision';
-
-      }
-
-      else if(item.estado === 'Esperando Proveedor'){
-
-        estadoClass =
-        'estado-revision';
-
-      }
-
-      else{
-
-        estadoClass =
-        'estado-cerrado';
-
-      }
-
-
-
-
-
-      html += `
-
-      <tr>
-
-        <td>
-          ${item.proveedor || '-'}
-        </td>
-
-        <td>
-          ${item.material || '-'}
-        </td>
-
-        <td>
-          ${item.tipo_recepcion || '-'}
-        </td>
-
-        <td>
-          ${item.cantidad || 0}
-        </td>
-
-        <td>
-          ${item.porcentaje_revisado || 0}%
-        </td>
-
-        <td>
-          ${item.novedades || 0}
-        </td>
-
-        <td>
-
-  <span class="${estadoClass}">
-    ${item.novedad_original || item.estado}
-  </span>
-
-</td>
-
-<td>
-
-  <span class="${estadoClass}">
-    ${item.estado}
-  </span>
-
-</td>
-
-        <td>
-
-          ${new Date(
-            item.created_at
-          ).toLocaleString('es-CO')}
-
-        </td>
-
-        <td>
-
-          <div class="acciones-tabla-mini">
-
-            ${
-
-              item.pdf_url
-
-              ?
-
-              `
-
-            <button
-  class="btn-mini btn-seguimiento-mini
-  ${!puedeGestionar ? 'btn-bloqueado' : ''}"
-  title="${
-    puedeGestionar
-    ? 'Seguimiento'
-    : 'Solo Compras, Auditor y Admin'
-  }"
-  ${
-    puedeGestionar
-    ? `onclick="window.validarRecepcion(${item.id})"`
-    : ''
-  }
->
-
-  📋
-
-</button>
-
-              `
-
-              :
-
-              ''
-
-            }
-
-            <button
-              class="btn-mini btn-observacion-mini"
-              title="Ver Observación"
-              onclick="window.verObservacion(\`${item.observacion || ''}\`)"
-            >
-
-              👁️
-
-            </button>
-${
-  item.pdf_url
-  ?
-  `
-  <button
-    class="btn-mini btn-pdf-mini"
-    title="Ver soportes"
-    onclick="window.verSoportesRecepcion(${item.id})"
-  >
-    📎
-  </button>
-  `
-  :
-  ''
-}
-
-            </button>
-
-           <button
-  class="btn-mini btn-eliminar-mini
-  ${!puedeEliminar ? 'btn-bloqueado' : ''}"
-  title="${
-    puedeEliminar
-    ? 'Eliminar'
-    : 'Solo Admin y Auditor'
-  }"
-  ${
-    puedeEliminar
-    ? `onclick="eliminarRecepcion(${item.id})"`
-    : ''
-  }
->
-
-  🗑️
-
-</button>
-
-          </div>
-
-        </td>
-
-      </tr>
-
-      `;
-
+    soportesSeleccionados.push({
+      tipo: 'drive',
+      nombre: adjuntosCommon ? adjuntosCommon.nombreEnlaceDrive(url, totalSoportes() + 1) : `Enlace Drive #${totalSoportes() + 1}`,
+      url: url,
+      mime: 'text/uri-list',
+      tamano: 0
     });
 
-
-
-
-
-    body.innerHTML =
-    html;
-
+    input.value = '';
+    renderSoportesTemporales();
   }
 
-  catch(error){
-
-    console.log(error);
-
-  }
-
-};
-
-
-
-
-
-// ======================
-// MODAL GESTION
-// ======================
-
-window.validarRecepcion = async function(id){
-
-  try{
-
-    window.recepcionGestionando =
-    Number(id);
-
-
-
-
-
-    const modal =
-
-    document.getElementById(
-      'modalGestion'
-    );
-
-
-
-
-
-    const timeline =
-
-    document.getElementById(
-      'timelineSeguimiento'
-    );
-
-
-
-
-
-    const comentarioInput =
-
-    document.getElementById(
-      'gestionComentarioInput'
-    );
-
-
-
-
-
-    const estadoInput =
-
-    document.getElementById(
-      'gestionEstadoInput'
-    );
-
-
-
-
-
-    comentarioInput.value = '';
-
-console.log(
-'ID RECEPCION:',
-window.recepcionGestionando
-);
-
-    const consulta =
-
-    await window.supabaseClient
-
-    .from('recepciones')
-
-    .select('*')
-
-    .eq(
-
-      'id',
-
-      Number(id)
-
-    )
-
-    .single();
-
-
-
-
-
-    if(consulta.error){
-
-      console.log(
-        consulta.error
-      );
-
-      return;
-
-    }
-
-
-
-
-
-    const recepcion =
-    consulta.data;
-
-
-
-
-
-    estadoInput.value =
-    recepcion.estado || 'Pendiente';
-
-
-
-
-
-    timeline.innerHTML = '';
-
-
-
-
-
-    if(
-
-      !recepcion.seguimiento ||
-
-      recepcion.seguimiento.trim() === ''
-
-    ){
-
-      timeline.innerHTML =
-
-      `
-
-      <div class="sin-notificaciones">
-
-        Sin seguimiento registrado
-
-      </div>
-
-      `;
-
-    }
-
-    else{
-
-      const bloques =
-
-      recepcion.seguimiento
-
-      .split('━━━━━━━━━━━━━━━━━━')
-
-      .reverse();
-
-bloques.forEach(function(item){
-
-  if(item.trim() === ''){
-    return;
-  }
-
-  let badgeClass = 'estado-default';
-  let estadoTexto = 'Seguimiento';
-
-  if(item.includes('Pendiente')){
-    badgeClass = 'estado-pendiente-badge';
-    estadoTexto = 'Pendiente';
-  }
-
-  else if(item.includes('En Gestión Compras')){
-    badgeClass = 'estado-gestion-badge';
-    estadoTexto = 'En Gestión Compras';
-  }
-
-  else if(item.includes('Contactando Proveedor')){
-    badgeClass = 'estado-contacto-badge';
-    estadoTexto = 'Contactando Proveedor';
-  }
-
-  else if(item.includes('Esperando Respuesta')){
-    badgeClass = 'estado-espera-badge';
-    estadoTexto = 'Esperando Respuesta';
-  }
-
-  else if(item.includes('Solucionado')){
-    badgeClass = 'estado-solucionado-badge';
-    estadoTexto = 'Solucionado';
-  }
-
-  else if(item.includes('Cerrado')){
-    badgeClass = 'estado-cerrado-badge';
-    estadoTexto = 'Cerrado';
-  }
-
-  timeline.innerHTML += `
-
-  <div class="timeline-item">
-
-      <div class="timeline-top">
-
-          <span class="timeline-badge ${badgeClass}">
-              ${estadoTexto}
-          </span>
-
-      </div>
-
-      <div class="timeline-comentario">
-
-          ${item.replace(/\n/g,'<br>')}
-
-      </div>
-
-  </div>
-
-  `;
-
-});
-      
-
-    }
-
-
-
-
-
-    modal.classList.add(
-      'active'
-    );
-
-  }
-
-  catch(error){
-
-    console.log(error);
-
-  }
-
-};
-
-
-
-
-
-// ======================
-// CERRAR MODAL
-// ======================
-
-window.cerrarModalGestion = function(){
-
-  const modal =
-
-  document.getElementById(
-    'modalGestion'
-  );
-
-
-
-
-
-  if(modal){
-
-    modal.classList.remove(
-      'active'
-    );
-
-  }
-
-};
-
-
-
-
-
-// ======================
-// GUARDAR GESTION
-// ======================
-
-window.guardarGestionBtn =
-document.getElementById(
-  'guardarGestionBtn'
-);
-
-if(window.guardarGestionBtn){
-
-  window.guardarGestionBtn.onclick =
-
-  async function(){
-
-    try{
-
-      const comentario =
-
-      document.getElementById(
-        'gestionComentarioInput'
-      ).value.trim();
-
-      const estado =
-
-      document.getElementById(
-        'gestionEstadoInput'
-      ).value;
-
-      if(comentario === ''){
-
-        notifAlert(
-          'Ingrese comentario'
-        );
-
-        return;
-
-      }
-
-      if(!window.recepcionGestionando){
-
-        notifAlert(
-          'No se encontró la recepción.'
-        );
-
-        return;
-
-      }
-
-      // ======================
-      // CONSULTAR RECEPCION
-      // ======================
-
-      const consulta =
-
-      await window.supabaseClient
-
-      .from('recepciones')
-
-      .select('*')
-
-      .eq(
-        'id',
-        Number(
-          window.recepcionGestionando
-        )
-      )
-
-      .single();
-
-      if(consulta.error){
-
-        console.log(
-          consulta.error
-        );
-
-        notifAlert(
-          'Error consultando recepción'
-        );
-
-        return;
-
-      }
-
-      const recepcion =
-      consulta.data;
-
-      const fecha =
-
-      new Date()
-      .toLocaleString(
-        'es-CO'
-      );
-
-      let seguimiento =
-
-      recepcion.seguimiento || '';
-
-      seguimiento +=
-
-`
-━━━━━━━━━━━━━━━━━━
-
-📅 ${fecha}
-
-👤 Usuario:
-${window.usuarioLogueado.usuario}
-
-🏷️ Estado:
-${estado}
-
-📝 Comentario:
-${comentario}
-`;
-
-      // ======================
-      // ACTUALIZAR
-      // ======================
-
-      const update =
-
-      await window.supabaseClient
-
-      .from('recepciones')
-
-      .update({
-
-        estado:
-        estado,
-
-        comentario_validacion:
-        comentario,
-
-        seguimiento:
-        seguimiento
-
-        // IMPORTANTE:
-        // NO TOCAR novedad_original
-
-      })
-
-      .eq(
-        'id',
-        Number(
-          window.recepcionGestionando
-        )
-      );
-
-      if(update.error){
-
-        console.log(
-          update.error
-        );
-
-        notifAlert(
-          'Error actualizando gestión'
-        );
-
-        return;
-
-      }
-
-      // ======================
-      // NOTIFICACION
-      // ======================
-
-      window.crearNotificacion(
-
-`🛒 Compras actualizó seguimiento
-
-Estado:
-${estado}
-
-Comentario:
-${comentario}`
-
-      );
-
-      // ======================
-      // REFRESCAR
-      // ======================
-
-      await window.renderRecepciones();
-
-      await window.actualizarKPIsRecepcion();
-
-      await window.actualizarDashboardRecepcion();
-
-      // ======================
-      // CERRAR MODAL
-      // ======================
-
-      window.cerrarModalGestion();
-
-    }
-
-    catch(error){
-
-      console.log(error);
-
-    }
-
-  };
-
-}
-// ======================
-// ELIMINAR RECEPCION
-// ======================
-
-window.eliminarRecepcion = async function(id){
-
-  try{
-
-    const confirmar = window.Notif && typeof window.Notif.confirm === 'function'
-      ? await window.Notif.confirm(
-          'Esta acción no se puede deshacer.',
-          '¿Eliminar recepción?'
-        )
-      : window.confirm('¿Eliminar recepción?');
-
-    if(!confirmar){
+  function renderSoportesTemporales() {
+    const lista = $('listaSoportesRecepcion');
+    const contador = $('contadorSoportesRecepcion');
+    const max = adjuntosCommon?.MAX_ADJUNTOS || 10;
+
+    if (contador) contador.textContent = `${totalSoportes()} / ${max}`;
+    if (!lista) return;
+
+    if (soportesSeleccionados.length === 0) {
+      lista.innerHTML = '<div class="adjunto-vacio">Aún no se han agregado soportes documentales.</div>';
       return;
     }
 
-    const consulta = await window.supabaseClient
-      .from('recepciones')
-      .select('pdf_url')
-      .eq('id', Number(id))
-      .single();
+    lista.innerHTML = soportesSeleccionados.map((soporte, idx) => {
+      const visual = adjuntosCommon ? adjuntosCommon.tipoVisual(soporte) : { icono: '📄', etiqueta: 'Archivo' };
+      const meta = soporte.tipo === 'drive' ? visual.etiqueta : `${visual.etiqueta} · ${adjuntosCommon ? adjuntosCommon.formatearTamano(soporte.tamano) : (soporte.tamano + ' B')}`;
 
-    if (consulta.error) {
-      notifAlert('No fue posible consultar los soportes: ' + consulta.error.message);
-      return;
-    }
-
-    const eliminacion = await window.supabaseClient
-      .from('recepciones')
-      .delete()
-      .eq('id', Number(id));
-
-    if (eliminacion.error) {
-      notifAlert('No fue posible eliminar la recepción: ' + eliminacion.error.message);
-      return;
-    }
-
-    const soportes = adjuntosCommonRecepcion
-      ? adjuntosCommonRecepcion.deserializarRecepcion(consulta.data?.pdf_url)
-      : [];
-    const rutas = soportes
-      .filter(function (soporte) { return soporte.tipo === 'archivo' && soporte.ruta; })
-      .map(function (soporte) { return soporte.ruta; });
-
-    if (rutas.length > 0) {
-      const limpieza = await window.supabaseClient
-        .storage
-        .from('recepciones-pdf')
-        .remove(rutas);
-      if (limpieza.error) {
-        console.warn('La recepción se eliminó, pero algunos archivos no pudieron limpiarse:', limpieza.error);
-      }
-    }
-
-    await window.renderRecepciones();
-    await window.actualizarKPIsRecepcion();
-    await window.actualizarDashboardRecepcion();
-    notifAlert('Recepción eliminada correctamente');
-
-  }
-
-  catch(error){
-    console.log(error);
-    notifAlert(error.message || 'No fue posible eliminar la recepción');
-  }
-
-};
-
-
-
-// ======================
-// ACTUALIZAR KPIS
-// ======================
-
-window.actualizarKPIsRecepcion = async function(){
-
-  try{
-
-    const response =
-
-    await window.supabaseClient
-
-    .from('recepciones')
-
-    .select('*');
-
-
-
-
-
-    const recepciones =
-    response.data || [];
-
-
-
-
-
-    const kpiRecepciones =
-
-    document.getElementById(
-      'kpiRecepciones'
-    );
-
-
-
-
-
-    const kpiRevisado =
-
-    document.getElementById(
-      'kpiRevisado'
-    );
-
-
-
-
-
-    const kpiNovedades =
-
-    document.getElementById(
-      'kpiNovedades'
-    );
-
-
-
-
-
-    const kpiFaltantes =
-
-    document.getElementById(
-      'kpiFaltantes'
-    );
-
-
-
-
-
-    if(kpiRecepciones){
-
-      kpiRecepciones.innerText =
-      recepciones.length;
-
-    }
-
-
-
-
-
-    if(recepciones.length > 0){
-
-      const ultima =
-      recepciones[0];
-
-
-
-
-
-      if(kpiRevisado){
-
-        kpiRevisado.innerText =
-
-        ultima.porcentaje_revisado + '%';
-
-      }
-
-
-
-
-
-      if(kpiNovedades){
-
-        kpiNovedades.innerText =
-
-        ultima.novedades || 0;
-
-      }
-
-
-
-
-
-      if(kpiFaltantes){
-
-        kpiFaltantes.innerText =
-
-        ultima.faltantes || 0;
-
-      }
-
-    }
-
-  }
-
-  catch(error){
-
-    console.log(error);
-
-  }
-
-};
-
-
-
-
-
-// ======================
-// AUTO REFRESH
-// ======================
-
-window.iniciarRefreshRecepcion = function(){
-
-  if(window.refreshRecepcion){
-
-    clearInterval(
-      window.refreshRecepcion
-    );
-
-  }
-
-
-
-
-
-  window.refreshRecepcion =
-
-  setInterval(async function(){
-
-  await window.renderRecepciones();
-
-await window.actualizarKPIsRecepcion();
-
-await window.actualizarDashboardRecepcion();
-
-  },5000);
-
-};
-
-
-
-
-
-// ======================
-// LIMPIAR FORMULARIO
-// ======================
-
-function limpiarFormulario(){
-
-  document.getElementById(
-    'proveedorInput'
-  ).value = '';
-
-  document.getElementById(
-    'materialInput'
-  ).value = '';
-
-  document.getElementById(
-    'cantidadInput'
-  ).value = '';
-
-  document.getElementById(
-    'revisadasInput'
-  ).value = '';
-
-  document.getElementById(
-    'novedadesInput'
-  ).value = '';
-
-  document.getElementById(
-    'faltantesInput'
-  ).value = '';
-
-  document.getElementById(
-    'observacionInput'
-  ).value = '';
-
-  const inputSoportes = document.getElementById('pdfInput');
-  if (inputSoportes) inputSoportes.value = '';
-
-  const inputDrive = document.getElementById('driveLinkRecepcion');
-  if (inputDrive) inputDrive.value = '';
-
-  soportesRecepcionSeleccionados = [];
-  renderSoportesRecepcionTemporales();
-
-}
-
-
-
-
-
-// ======================
-// VER SOPORTES RECEPCIÓN
-// ======================
-
-window.verSoportesRecepcion = function (id) {
-  const modal = document.getElementById('modalSoportesRecepcion');
-  const contenido = document.getElementById('contenidoSoportesRecepcion');
-  const contador = document.getElementById('contadorSoportesRecepcionModal');
-  if (!modal || !contenido || !adjuntosCommonRecepcion) return;
-
-  window.recepcionSoportesModalId = Number(id);
-  const soportes = window.recepcionesCacheSoportes[id] || [];
-  if (contador) contador.textContent = `${soportes.length} / ${adjuntosCommonRecepcion.MAX_ADJUNTOS}`;
-
-  const puedeGestionar = puedeGestionarSoportesRecepcion();
-  if (soportes.length === 0) {
-    contenido.innerHTML = '<div class="adjunto-vacio">Esta recepción no tiene soportes registrados.</div>';
-  } else {
-    contenido.innerHTML = `<div class="adjuntos-lista">${soportes.map(function (soporte, index) {
-      const visual = adjuntosCommonRecepcion.tipoVisual(soporte);
-      const meta = soporte.tipo === 'drive'
-        ? 'Google Drive'
-        : `${visual.etiqueta}${soporte.tamano ? ' · ' + adjuntosCommonRecepcion.formatearTamano(soporte.tamano) : ''}`;
-      const url = adjuntosCommonRecepcion.escaparHTML(soporte.url);
       return `
         <div class="adjunto-item">
           <div class="adjunto-item__info">
             <span class="adjunto-item__icono">${visual.icono}</span>
             <div class="adjunto-item__texto">
-              <span class="adjunto-item__nombre">${adjuntosCommonRecepcion.escaparHTML(soporte.nombre)}</span>
-              <span class="adjunto-item__meta">${adjuntosCommonRecepcion.escaparHTML(meta)}</span>
+              <span class="adjunto-item__nombre">${sanitize(soporte.nombre)}</span>
+              <span class="adjunto-item__meta">${sanitize(meta)}</span>
             </div>
           </div>
           <div class="adjunto-item__acciones">
-            <button type="button" class="adjunto-btn adjunto-btn--abrir" data-url="${url}">Abrir</button>
-            ${puedeGestionar ? `<button type="button" class="adjunto-btn adjunto-btn--eliminar" onclick="eliminarSoporteRecepcionGuardado(${index})">Eliminar</button>` : ''}
+            <button type="button" class="adjunto-btn--eliminar" onclick="window.eliminarSoporteRecepcionTemporal(${idx})">Quitar</button>
           </div>
         </div>`;
-    }).join('')}</div>`;
-
-    contenido.querySelectorAll('[data-url]').forEach(function (boton) {
-      boton.onclick = function () {
-        window.open(boton.dataset.url, '_blank', 'noopener,noreferrer');
-      };
-    });
+    }).join('');
   }
 
-  const panelAgregar = document.getElementById('btnAgregarArchivosRecepcionModal')?.closest('.adjuntos-panel');
-  if (panelAgregar) panelAgregar.style.display = puedeGestionar ? 'grid' : 'none';
-  modal.classList.add('active');
-};
+  window.eliminarSoporteRecepcionTemporal = function (index) {
+    soportesSeleccionados.splice(Number(index), 1);
+    renderSoportesTemporales();
+  };
 
-window.cerrarModalSoportesRecepcion = function () {
-  document.getElementById('modalSoportesRecepcion')?.classList.remove('active');
-};
+  // 7. Subida de Archivos a Supabase Storage
+  async function subirSoportes(listaSoportes = soportesSeleccionados) {
+    const bucket = window.ERP_CONFIG?.STORAGE_BUCKETS?.RECEPCIONES || 'recepciones-pdf';
+    const soportesGuardados = [];
+    const rutasSubidas = [];
 
+    for (const soporte of listaSoportes) {
+      if (soporte.tipo === 'drive') {
+        soportesGuardados.push({
+          tipo: 'drive',
+          nombre: soporte.nombre,
+          url: soporte.url,
+          ruta: '',
+          mime: 'text/uri-list',
+          tamano: 0
+        });
+        continue;
+      }
 
-// ======================
-// VER OBSERVACION
-// ======================
+      const archivo = soporte.archivo;
+      if (!archivo) {
+        if (soporte.url) soportesGuardados.push(soporte);
+        continue;
+      }
 
-window.verObservacion = function(observacion){
+      const limpio = String(archivo.name || 'soporte')
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-zA-Z0-9._-]/g, '_');
+      const idUnico = window.crypto?.randomUUID ? window.crypto.randomUUID() : `${Date.now()}_${Math.random().toString(16).slice(2)}`;
+      const ruta = `recepciones/${idUnico}_${limpio}`;
 
-  const modal = document.getElementById(
-    'modalObservacion'
-  );
+      const subida = await window.supabaseClient.storage
+        .from(bucket)
+        .upload(ruta, archivo, { upsert: false, contentType: archivo.type || undefined });
 
-  const contenido = document.getElementById(
-    'contenidoObservacion'
-  );
+      if (subida.error) {
+        if (rutasSubidas.length) await window.supabaseClient.storage.from(bucket).remove(rutasSubidas);
+        throw new Error(`Error subiendo archivo "${archivo.name}": ${subida.error.message}`);
+      }
 
-  contenido.innerText =
-  observacion || 'Sin observaciones registradas';
+      rutasSubidas.push(ruta);
+      const urlData = window.supabaseClient.storage.from(bucket).getPublicUrl(ruta);
 
-  modal.classList.add('active');
+      soportesGuardados.push({
+        tipo: 'archivo',
+        nombre: archivo.name,
+        url: urlData.data.publicUrl,
+        ruta: ruta,
+        mime: archivo.type || '',
+        tamano: archivo.size
+      });
+    }
 
-};
+    return { soportesGuardados, rutasSubidas };
+  }
 
-window.cerrarModalObservacion = function(){
+  // 8. Guardar Nueva Recepción
+  async function guardarRecepcion() {
+    const btn = $('guardarRecepcion');
+    try {
+      if (typeof window.tienePermiso === 'function' && !window.tienePermiso('recepcion', 'crear')) {
+        notificar('Acceso denegado: No cuenta con permisos para crear recepciones.');
+        return;
+      }
 
-  document
-  .getElementById('modalObservacion')
-  .classList.remove('active');
+      const proveedor = getVal('proveedorInput').trim();
+      const material = getVal('materialInput').trim();
+      const tipoRecepcion = getVal('tipoRecepcionInput');
+      const cantidad = Number(getVal('cantidadInput'));
+      const revisadas = Number(getVal('revisadasInput'));
+      const novedades = Number(getVal('novedadesInput')) || 0;
+      const faltantes = Number(getVal('faltantesInput')) || 0;
+      const observacion = getVal('observacionInput').trim();
+      const estado = getVal('estadoRecepcionInput');
 
-};
+      if (!proveedor || !material || cantidad <= 0) {
+        notificar('Complete los campos obligatorios: Proveedor, Material y Cantidad Total.');
+        return;
+      }
 
+      const min = adjuntosCommon?.MIN_ADJUNTOS || 1;
+      if (totalSoportes() < min) {
+        notificar(`Debe adjuntar al menos ${min} soporte documental para registrar la recepción.`);
+        return;
+      }
 
-window.mostrarAlerta = function(
-  titulo,
-  mensaje
-){
+      if (btn) btn.disabled = true;
 
-  document.getElementById(
-    'tituloAlerta'
-  ).innerText = titulo;
+      // Subir soportes a Storage
+      let pdfUrl = '';
+      let rutasSubidas = [];
+      try {
+        const carga = await subirSoportes();
+        rutasSubidas = carga.rutasSubidas;
+        pdfUrl = adjuntosCommon ? adjuntosCommon.serializarRecepcion(carga.soportesGuardados) : JSON.stringify(carga.soportesGuardados);
+      } catch (err) {
+        notificar(err.message, 'error');
+        if (btn) btn.disabled = false;
+        return;
+      }
 
-  document.getElementById(
-    'mensajeAlerta'
-  ).innerText = mensaje;
+      const pct = Math.min((revisadas / cantidad) * 100, 100).toFixed(1);
+      const usuario = window.usuarioLogueado?.usuario || 'Usuario';
 
-  document.getElementById(
-    'modalAlerta'
-  ).classList.add(
-    'active'
-  );
+      const { error } = await window.supabaseClient
+        .from('recepciones')
+        .insert([{
+          proveedor,
+          material,
+          tipo_recepcion: tipoRecepcion,
+          cantidad,
+          revisadas,
+          novedades,
+          faltantes,
+          porcentaje_revisado: pct,
+          observacion,
+          comentario_validacion: '',
+          seguimiento: '',
+          estado,
+          novedad_original: estado,
+          pdf_url: pdfUrl,
+          usuario_recepcion: usuario,
+          created_at: new Date().toISOString()
+        }]);
 
-};
+      if (error) {
+        const bucket = window.ERP_CONFIG?.STORAGE_BUCKETS?.RECEPCIONES || 'recepciones-pdf';
+        if (rutasSubidas.length) await window.supabaseClient.storage.from(bucket).remove(rutasSubidas);
+        notificar('Error guardando en base de datos: ' + error.message, 'error');
+        return;
+      }
 
-window.cerrarAlerta = function(){
+      if (typeof window.guardarHistorial === 'function') {
+        await window.guardarHistorial('CREAR', 'RECEPCIONES', `Recepción creada: ${proveedor} - ${material} (${estado})`);
+      }
 
-  document.getElementById(
-    'modalAlerta'
-  ).classList.remove(
-    'active'
-  );
+      if (typeof window.crearNotificacion === 'function') {
+        window.crearNotificacion(`📦 Recepción registrada: ${proveedor} (${material}) - Estado: ${estado}`, 'success');
+      }
 
-};
+      limpiarFormulario();
+      await window.renderRecepciones();
+      await window.actualizarKPIsRecepcion();
+      await window.actualizarDashboardRecepcion();
+      notificar('Recepción registrada exitosamente', 'success');
 
+    } catch (e) {
+      console.error(e);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
 
-// ======================
-// DASHBOARD RECEPCION
-// ======================
+  function limpiarFormulario() {
+    setVal('proveedorInput', '');
+    setVal('materialInput', '');
+    setVal('cantidadInput', '');
+    setVal('revisadasInput', '');
+    setVal('novedadesInput', '0');
+    setVal('faltantesInput', '0');
+    setVal('observacionInput', '');
 
-window.actualizarDashboardRecepcion =
-async function(){
+    const fileInput = $('pdfInput');
+    if (fileInput) fileInput.value = '';
+    const driveInput = $('driveLinkRecepcion');
+    if (driveInput) driveInput.value = '';
 
-  try{
+    soportesSeleccionados = [];
+    renderSoportesTemporales();
+  }
 
-    const response =
+  // 9. Renderizado de Tabla de Recepciones & Buscador
+  window.renderRecepciones = async function (datos = null) {
+    const body = $('recepcionesBody');
+    if (!body) return;
+
+    try {
+      let recepciones = datos;
+      if (!recepciones) {
+        const { data, error } = await window.supabaseClient
+          .from('recepciones')
+          .select('*')
+          .order('id', { ascending: false });
+
+        if (error) {
+          console.error('Error renderRecepciones:', error.message);
+          return;
+        }
+        recepciones = data || [];
+        window.recepcionesCacheDatos = recepciones;
+      }
+
+      if (recepciones.length === 0) {
+        body.innerHTML = `<tr><td colspan="10" style="text-align:center;padding:30px;color:#64748b;">No hay recepciones registradas</td></tr>`;
+        return;
+      }
+
+      const rol = (window.usuarioLogueado?.rol || '').toLowerCase();
+      const puedeGestionar = ['admin', 'auditor', 'lider', 'compras'].includes(rol);
+      const puedeEliminar = ['admin', 'auditor'].includes(rol);
+
+      window.recepcionesCacheSoportes = {};
+
+      body.innerHTML = recepciones.map(item => {
+        window.recepcionesCacheSoportes[item.id] = adjuntosCommon ? adjuntosCommon.deserializarRecepcion(item.pdf_url) : [];
+
+        let estadoClass = 'estado-pendiente';
+        const est = String(item.estado || '').toLowerCase();
+        if (est.includes('gestión') || est.includes('gestion') || est.includes('proveedor') || est.includes('esperando')) {
+          estadoClass = 'estado-revision';
+        } else if (est.includes('solucionado') || est.includes('conforme')) {
+          estadoClass = 'estado-revisado';
+        } else if (est.includes('dañ') || est.includes('falt') || est.includes('cerrad')) {
+          estadoClass = 'estado-cerrado';
+        }
+
+        return `
+          <tr>
+            <td><strong>${sanitize(item.proveedor)}</strong></td>
+            <td>${sanitize(item.material)}</td>
+            <td>${sanitize(item.tipo_recepcion || '-')}</td>
+            <td>${item.cantidad || 0}</td>
+            <td><strong>${item.porcentaje_revisado || 0}%</strong></td>
+            <td>${item.novedades || 0}</td>
+            <td><span class="${estadoClass}">${sanitize(item.novedad_original || item.estado)}</span></td>
+            <td><span class="${estadoClass}">${sanitize(item.estado)}</span></td>
+            <td>${new Date(item.created_at).toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' })}</td>
+            <td>
+              <div class="acciones-tabla-mini">
+                <button type="button" class="btn-mini btn-seguimiento-mini ${!puedeGestionar ? 'btn-bloqueado' : ''}" 
+                  title="${puedeGestionar ? 'Gestión Compras & Trazabilidad' : 'Sin permisos'}" 
+                  ${puedeGestionar ? `onclick="window.validarRecepcion(${item.id})"` : ''}>
+                  📋
+                </button>
+                <button type="button" class="btn-mini btn-observacion-mini" title="Ver Observación" 
+                  onclick="window.verObservacion(${item.id})">
+                  👁️
+                </button>
+                ${item.pdf_url ? `
+                  <button type="button" class="btn-mini btn-pdf-mini" title="Ver Soportes" 
+                    onclick="window.verSoportesRecepcion(${item.id})">
+                    📎
+                  </button>` : ''}
+                ${puedeEliminar ? `
+                  <button type="button" class="btn-mini btn-eliminar-mini" title="Eliminar" 
+                    onclick="window.eliminarRecepcion(${item.id})">
+                    🗑️
+                  </button>` : ''}
+              </div>
+            </td>
+          </tr>`;
+      }).join('');
+
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  // 10. Modal Gestión Compras & Timeline Interactivo
+  window.validarRecepcion = async function (id) {
+    try {
+      window.recepcionGestionando = Number(id);
+
+      const { data: rec, error } = await window.supabaseClient
+        .from('recepciones')
+        .select('*')
+        .eq('id', Number(id))
+        .single();
+
+      if (error || !rec) {
+        notificar('No se pudo consultar el registro de recepción.');
+        return;
+      }
+
+      setVal('gestionEstadoInput', rec.estado || 'Pendiente');
+      setVal('gestionComentarioInput', '');
+
+      const timeline = $('timelineSeguimiento');
+      const countBadge = $('timelineCountBadge');
+
+      if (timeline) {
+        const textoSeguimiento = (rec.seguimiento || '').trim();
+
+        if (!textoSeguimiento) {
+          timeline.innerHTML = `
+            <div class="timeline-empty-state">
+              <div class="timeline-empty-icon">📋</div>
+              <h5>Sin intervenciones registradas</h5>
+              <p>Agregue un seguimiento en el formulario lateral para documentar acuerdos con proveedores.</p>
+            </div>`;
+          if (countBadge) countBadge.innerText = '0 Registros';
+        } else {
+          const bloques = textoSeguimiento.split('━━━━━━━━━━━━━━━━━━').reverse().filter(b => b.trim());
+
+          if (countBadge) {
+            countBadge.innerText = `${bloques.length} ${bloques.length === 1 ? 'Registro' : 'Registros'}`;
+          }
+
+          timeline.innerHTML = bloques.map((bloque, index) => {
+            const matchFecha = bloque.match(/📅\s*([^\n]+)/);
+            const matchUsuario = bloque.match(/👤(?:\s*Usuario:)?\s*([^\n]+)/i);
+            const matchEstado = bloque.match(/🏷️(?:\s*Estado:)?\s*([^\n]+)/i);
+
+            const fecha = matchFecha ? matchFecha[1].trim() : 'Fecha no registrada';
+            const usuario = matchUsuario ? matchUsuario[1].trim() : 'Compras';
+            const estado = matchEstado ? matchEstado[1].trim() : 'Seguimiento';
+            const inicial = usuario.charAt(0).toUpperCase();
+
+            let lineas = bloque.split('\n').map(l => l.trim()).filter(Boolean);
+            let lineasFiltradas = lineas.filter(l => {
+              const low = l.toLowerCase();
+              if (l.startsWith('📅') || l.startsWith('👤') || l.startsWith('🏷️') || l.startsWith('📝')) return false;
+              if (low === usuario.toLowerCase() || low === estado.toLowerCase()) return false;
+              if (low.startsWith('usuario:') || low.startsWith('estado:') || low.startsWith('comentario:')) return false;
+              return true;
+            });
+
+            let comentarioFinal = lineasFiltradas.join('\n').trim() || 'Sin comentario adicional.';
+
+            let badgeClass = 'badge-status-default';
+            const estadoLower = estado.toLowerCase();
+            if (estadoLower.includes('pendiente')) badgeClass = 'badge-status-pendiente';
+            else if (estadoLower.includes('gestión') || estadoLower.includes('gestion')) badgeClass = 'badge-status-gestion';
+            else if (estadoLower.includes('proveedor') || estadoLower.includes('contacto')) badgeClass = 'badge-status-proveedor';
+            else if (estadoLower.includes('solucion')) badgeClass = 'badge-status-solucionado';
+            else if (estadoLower.includes('cerrad')) badgeClass = 'badge-status-cerrado';
+
+            const esUltimo = index === bloques.length - 1;
+
+            return `
+              <div class="timeline-item-wrapper">
+                <div class="timeline-card-item">
+                  <div class="timeline-item-header">
+                    <div class="timeline-user-tag">
+                      <div class="user-tag-avatar">${inicial}</div>
+                      <span class="timeline-user-name">${sanitize(usuario)}</span>
+                    </div>
+                    <span class="timeline-date-chip">📅 ${sanitize(fecha)}</span>
+                  </div>
+
+                  <div>
+                    <span class="timeline-badge-status ${badgeClass}">● ${sanitize(estado)}</span>
+                  </div>
+
+                  <div class="timeline-comment-box">
+                    ${sanitize(comentarioFinal).replace(/\n/g, '<br>')}
+                  </div>
+                </div>
+
+                ${!esUltimo ? `
+                  <div class="timeline-separator">
+                    <div class="timeline-node-dot"></div>
+                  </div>
+                ` : ''}
+              </div>
+            `;
+          }).join('');
+        }
+      }
+
+      window.abrirModal('modalGestion');
+    } catch (err) {
+      console.error('Error abriendo gestión de compras:', err);
+    }
+  };
+
+  async function guardarGestion() {
+    const btn = $('guardarGestionBtn');
+    try {
+      const comentario = getVal('gestionComentarioInput').trim();
+      const estado = getVal('gestionEstadoInput');
+
+      if (!comentario) {
+        notificar('Ingrese los detalles o acuerdos para registrar el seguimiento.');
+        return;
+      }
+      if (!window.recepcionGestionando) return;
+
+      if (btn) btn.disabled = true;
+
+      const { data: rec } = await window.supabaseClient
+        .from('recepciones')
+        .select('*')
+        .eq('id', window.recepcionGestionando)
+        .single();
+
+      const fecha = new Date().toLocaleString('es-CO');
+      const usuario = window.usuarioLogueado?.usuario || 'Compras';
+      const entrada = `\n━━━━━━━━━━━━━━━━━━\n📅 ${fecha}\n👤 ${usuario}\n🏷️ Estado: ${estado}\n📝 ${comentario}\n`;
+      const nuevoSeguimiento = (rec.seguimiento || '') + entrada;
+
+      // Actualizar tabla recepciones
+      await window.supabaseClient
+        .from('recepciones')
+        .update({
+          estado: estado,
+          comentario_validacion: comentario,
+          seguimiento: nuevoSeguimiento
+        })
+        .eq('id', window.recepcionGestionando);
+
+      // Persistir registro en tabla seguimiento_recepcion
+      await window.supabaseClient
+        .from('seguimiento_recepcion')
+        .insert([{
+          recepcion_id: window.recepcionGestionando,
+          estado_anterior: rec.estado,
+          estado_nuevo: estado,
+          comentario: comentario,
+          usuario: usuario
+        }]);
+
+      if (typeof window.guardarHistorial === 'function') {
+        await window.guardarHistorial('SEGUIMIENTO', 'RECEPCIONES', `Intervención en recepción #${window.recepcionGestionando} (${rec.proveedor}) -> Estado: ${estado}`);
+      }
+
+      if (typeof window.crearNotificacion === 'function') {
+        window.crearNotificacion(`🛒 Seguimiento registrado en #${window.recepcionGestionando} (${rec.proveedor}) - ${estado}`, 'info');
+      }
+
+      window.cerrarModalGestion();
+      await window.renderRecepciones();
+      await window.actualizarKPIsRecepcion();
+      await window.actualizarDashboardRecepcion();
+      notificar('Seguimiento guardado con éxito', 'success');
+
+    } catch (err) {
+      console.error(err);
+    } finally {
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  // 11. Ver Observación & Soportes Modal
+  window.verObservacion = function (id) {
+    const item = window.recepcionesCacheDatos.find(i => i.id === Number(id));
+    const cont = $('contenidoObservacion');
+    if (cont) cont.innerText = item?.observacion || 'Sin observaciones registradas.';
+    window.abrirModal('modalObservacion');
+  };
+
+  window.verSoportesRecepcion = function (id) {
+    window.recepcionSoportesModalId = Number(id);
+    const soportes = window.recepcionesCacheSoportes[id] || [];
+    const cont = $('contenidoSoportesRecepcion');
+    const badge = $('contadorSoportesRecepcionModal');
+    const max = adjuntosCommon?.MAX_ADJUNTOS || 10;
+
+    if (badge) badge.textContent = `${soportes.length} / ${max}`;
+    if (!cont) return;
+
+    if (soportes.length === 0) {
+      cont.innerHTML = '<div class="adjunto-vacio">No hay soportes documentales registrados.</div>';
+    } else {
+      cont.innerHTML = `<div style="display:flex;flex-direction:column;gap:10px;">${soportes.map((s, idx) => `
+        <div class="adjunto-item">
+          <span>${sanitize(s.nombre)}</span>
+          <div style="display:flex;gap:6px;">
+            <button type="button" class="adjunto-btn--abrir" onclick="window.open('${s.url}', '_blank')">Abrir</button>
+            <button type="button" class="adjunto-btn--eliminar" onclick="window.eliminarSoporteRecepcionGuardado(${idx})">Eliminar</button>
+          </div>
+        </div>
+      `).join('')}</div>`;
+    }
+
+    window.abrirModal('modalSoportesRecepcion');
+  };
+
+  window.eliminarSoporteRecepcionGuardado = async function (index) {
+    const id = Number(window.recepcionSoportesModalId);
+    const soportes = window.recepcionesCacheSoportes[id] || [];
+    if (soportes.length <= 1) {
+      notificar('La recepción debe conservar al menos 1 soporte.');
+      return;
+    }
+
+    if (!confirm('¿Desea eliminar este soporte documental?')) return;
+
+    const restantes = soportes.filter((_, i) => i !== Number(index));
+    const eliminado = soportes[Number(index)];
+    const bucket = window.ERP_CONFIG?.STORAGE_BUCKETS?.RECEPCIONES || 'recepciones-pdf';
 
     await window.supabaseClient
+      .from('recepciones')
+      .update({ pdf_url: adjuntosCommon ? adjuntosCommon.serializarRecepcion(restantes) : JSON.stringify(restantes) })
+      .eq('id', id);
 
-    .from('recepciones')
-
-    .select('*');
-
-    if(response.error){
-
-      console.log(response.error);
-
-      return;
-
+    if (eliminado?.ruta) {
+      await window.supabaseClient.storage.from(bucket).remove([eliminado.ruta]);
     }
 
-    const datos =
-    response.data || [];
+    await window.renderRecepciones();
+    window.verSoportesRecepcion(id);
+  };
 
-    const resumenMeses = {};
+  // 12. Eliminar Recepción Completa
+  window.eliminarRecepcion = async function (id) {
+    if (typeof window.tienePermiso === 'function' && !window.tienePermiso('recepcion', 'eliminar')) {
+      notificar('Acceso denegado: No cuenta con permisos para eliminar recepciones.');
+      return;
+    }
 
-    datos.forEach(function(item){
+    if (!confirm('¿Eliminar definitivamente esta recepción y sus soportes vinculados?')) return;
 
-      const fecha =
-      new Date(item.created_at);
+    const soportes = window.recepcionesCacheSoportes[Number(id)] || [];
+    const rutas = soportes.filter(s => s.ruta).map(s => s.ruta);
+    const bucket = window.ERP_CONFIG?.STORAGE_BUCKETS?.RECEPCIONES || 'recepciones-pdf';
 
-      const mes =
+    await window.supabaseClient.from('recepciones').delete().eq('id', Number(id));
+    if (rutas.length) await window.supabaseClient.storage.from(bucket).remove(rutas);
 
-      fecha.toLocaleString(
-        'es-CO',
-        {
-          month:'long'
-        }
+    if (typeof window.guardarHistorial === 'function') {
+      await window.guardarHistorial('ELIMINAR', 'RECEPCIONES', `Se eliminó la recepción #${id}`);
+    }
+
+    await window.renderRecepciones();
+    await window.actualizarKPIsRecepcion();
+    await window.actualizarDashboardRecepcion();
+    notificar('Recepción eliminada correctamente', 'success');
+  };
+
+  // 13. KPIs y Dashboard Resumen
+  window.actualizarKPIsRecepcion = async function () {
+    try {
+      const { data: recs } = await window.supabaseClient.from('recepciones').select('*');
+      const lista = recs || [];
+
+      if ($('kpiRecepciones')) $('kpiRecepciones').innerText = lista.length;
+
+      if (lista.length > 0) {
+        const ult = lista[0];
+        if ($('kpiRevisado')) $('kpiRevisado').innerText = `${ult.porcentaje_revisado || 0}%`;
+        if ($('kpiNovedades')) $('kpiNovedades').innerText = ult.novedades || 0;
+        if ($('kpiFaltantes')) $('kpiFaltantes').innerText = ult.faltantes || 0;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  window.actualizarDashboardRecepcion = async function () {
+    const body = $('dashboardRecepcionBody');
+    if (!body) return;
+
+    try {
+      const { data: recs } = await window.supabaseClient.from('recepciones').select('*');
+      const meses = {};
+
+      (recs || []).forEach(item => {
+        const mes = new Date(item.created_at).toLocaleString('es-CO', { month: 'long' });
+        if (!meses[mes]) meses[mes] = { recs: 0, falt: 0, sobr: 0, dan: 0, tot: 0 };
+
+        meses[mes].recs++;
+        const nov = String(item.novedad_original || item.estado || '').toLowerCase();
+        if (nov.includes('faltante')) meses[mes].falt++;
+        if (nov.includes('sobrante')) meses[mes].sobr++;
+        if (nov.includes('dañ') || nov.includes('dan')) meses[mes].dan++;
+        if (nov.includes('falt') || nov.includes('sobr') || nov.includes('dañ') || nov.includes('dan')) meses[mes].tot++;
+      });
+
+      body.innerHTML = Object.keys(meses).map(m => `
+        <tr>
+          <td><strong>${m.toUpperCase()}</strong></td>
+          <td>${meses[m].recs}</td>
+          <td>${meses[m].falt}</td>
+          <td>${meses[m].sobr}</td>
+          <td>${meses[m].dan}</td>
+          <td><strong>${meses[m].tot}</strong></td>
+        </tr>
+      `).join('');
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  // 14. Eventos Delegados & Atajos
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') {
+      window.cerrarModalGestion();
+      window.cerrarModalObservacion();
+      window.cerrarModalSoportesRecepcion();
+    }
+
+    if (e.key === 'Enter' && !['TEXTAREA', 'BUTTON'].includes(e.target.tagName)) {
+      if (e.target.id === 'driveLinkRecepcion') {
+        e.preventDefault();
+        agregarDrive();
+        return;
+      }
+      const form = e.target.closest('#formRecepcionFast');
+      if (form) {
+        e.preventDefault();
+        const focusables = Array.from(form.querySelectorAll('input, select, textarea'));
+        const idx = focusables.indexOf(e.target);
+        if (idx > -1 && idx + 1 < focusables.length) focusables[idx + 1].focus();
+      }
+    }
+  });
+
+  document.addEventListener('input', function (e) {
+    if (e.target && (e.target.id === 'cantidadInput' || e.target.id === 'revisadasInput')) {
+      calcularPorcentajeEnVivo();
+    }
+    if (e.target && e.target.id === 'buscarRecepcion') {
+      const q = e.target.value.toLowerCase().trim();
+      if (!q) {
+        window.renderRecepciones(window.recepcionesCacheDatos);
+        return;
+      }
+      const filtrados = window.recepcionesCacheDatos.filter(i =>
+        String(i.proveedor || '').toLowerCase().includes(q) ||
+        String(i.material || '').toLowerCase().includes(q) ||
+        String(i.estado || '').toLowerCase().includes(q)
       );
+      window.renderRecepciones(filtrados);
+    }
+  });
 
-      if(!resumenMeses[mes]){
+  document.addEventListener('click', function (e) {
+    if (e.target.classList.contains('modal-documentos')) {
+      e.target.classList.remove('active');
+      e.target.style.display = 'none';
+    }
 
-        resumenMeses[mes] = {
-
-          recepciones:0,
-
-          faltantes:0,
-
-          sobrantes:0,
-
-          danados:0,
-
-          total:0
-
+    if (e.target.closest('#btnAgregarSoportesRecepcion')) {
+      e.preventDefault();
+      const fi = $('pdfInput');
+      if (fi) {
+        fi.onchange = ev => {
+          agregarArchivos(ev.target.files);
+          ev.target.value = '';
         };
-
+        fi.click();
       }
-
-      // ======================
-      // TOTAL RECEPCIONES
-      // ======================
-
-      resumenMeses[mes]
-      .recepciones++;
-
-      // ======================
-      // NOVEDAD ORIGINAL
-      // ======================
-
-      const novedad =
-
-      (
-        item.novedad_original ||
-        item.estado ||
-        ''
-      )
-
-      .toString()
-
-      .toLowerCase()
-
-      .trim();
-
-      // DEBUG
-      console.log(
-        'NOVEDAD:',
-        novedad
-      );
-
-      // ======================
-      // FALTANTES
-      // ======================
-
-      if(
-        novedad.includes(
-          'faltante'
-        )
-      ){
-
-        resumenMeses[mes]
-        .faltantes++;
-
-      }
-
-      // ======================
-      // SOBRANTES
-      // ======================
-
-      if(
-        novedad.includes(
-          'sobrante'
-        )
-      ){
-
-        resumenMeses[mes]
-        .sobrantes++;
-
-      }
-
-      // ======================
-      // DAÑADOS
-      // ======================
-
-      if(
-        novedad.includes(
-          'dañado'
-        ) ||
-
-        novedad.includes(
-          'danado'
-        )
-      ){
-
-        resumenMeses[mes]
-        .danados++;
-
-      }
-
-      // ======================
-      // TOTAL NOVEDADES
-      // ======================
-
-      if(
-
-        novedad.includes(
-          'faltante'
-        ) ||
-
-        novedad.includes(
-          'sobrante'
-        ) ||
-
-        novedad.includes(
-          'dañado'
-        ) ||
-
-        novedad.includes(
-          'danado'
-        )
-
-      ){
-
-        resumenMeses[mes]
-        .total++;
-
-      }
-
-    });
-
-    const body =
-
-    document.getElementById(
-      'dashboardRecepcionBody'
-    );
-
-    if(!body){
-
-      return;
-
     }
 
-    body.innerHTML = '';
+    if (e.target.closest('#btnAgregarDriveRecepcion')) {
+      e.preventDefault();
+      agregarDrive();
+    }
 
-    Object.keys(resumenMeses)
+    if (e.target.closest('#guardarRecepcion')) {
+      e.preventDefault();
+      guardarRecepcion();
+    }
 
-    .forEach(function(mes){
+    if (e.target.closest('#guardarGestionBtn')) {
+      e.preventDefault();
+      guardarGestion();
+    }
 
-      const item =
-      resumenMeses[mes];
+    if (e.target.closest('#descargarDashboardRecepcion')) {
+      e.preventDefault();
+      window.open('modules/dashboard-recepcion.html', '_blank');
+    }
+  });
 
-      body.innerHTML += `
-
-      <tr>
-
-        <td>${mes}</td>
-
-        <td>${item.recepciones}</td>
-
-        <td>${item.faltantes}</td>
-
-        <td>${item.sobrantes}</td>
-
-        <td>${item.danados}</td>
-
-        <td>${item.total}</td>
-
-      </tr>
-
-      `;
-
-    });
-
-  }
-
-  catch(error){
-
-    console.log(
-      'Error Dashboard:',
-      error
-    );
-
-  }
-
-};
-
-// ======================
-// DASHBOARD EJECUTIVO
-// ======================
-
-document.addEventListener(
-'click',
-function(e){
-
-if(
-  e.target &&
-  e.target.id ===
-  'descargarDashboardRecepcion'
-){
-
-  window.open(
-
-    'modules/dashboard-recepcion.html',
-
-    '_blank'
-
-  );
-
-}
-
-});
-
-// ======================
-// INICIO
-// ======================
-
-inicializarAdjuntosRecepcion();
-window.renderRecepciones();
-
-window.actualizarKPIsRecepcion();
-
-window.actualizarDashboardRecepcion();
-
-window.iniciarRefreshRecepcion();
+  // Inicialización
+  renderSoportesTemporales();
+  window.renderRecepciones();
+  window.actualizarKPIsRecepcion();
+  window.actualizarDashboardRecepcion();
+})();

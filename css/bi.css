@@ -1,81 +1,291 @@
-body{
-    background:#f5f7fb;
-    font-family:Arial;
+/* ==========================================================
+   BI INTELIGENTE & ANALÍTICA DE DATOS — PRO STYLES
+   ========================================================== */
+
+.bi-container {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  font-family: 'Poppins', sans-serif;
+  color: #0f172a;
 }
 
-.bi-container{
-    padding:20px;
+.bi-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #ffffff;
+  padding: 24px 28px;
+  border-radius: 20px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
 }
 
-.bi-header{
-    display:flex;
-    justify-content:space-between;
-    align-items:center;
+.bi-header h1 {
+  font-size: 22px;
+  font-weight: 800;
+  color: #0f172a;
+  margin: 0 0 4px 0;
 }
 
-.kpis{
-    display:grid;
-    grid-template-columns:repeat(4,1fr);
-    gap:20px;
-    margin:20px 0;
+.bi-header p {
+  color: #64748b;
+  font-size: 13px;
+  margin: 0;
 }
 
-.card-kpi{
-    background:white;
-    padding:20px;
-    border-radius:12px;
-    box-shadow:0 2px 8px rgba(0,0,0,.1);
+.btn-bi-upload {
+  background: #2563eb;
+  color: white;
+  padding: 12px 22px;
+  border-radius: 12px;
+  font-weight: 700;
+  font-size: 13.5px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.28);
+  transition: background 0.2s, transform 0.2s;
 }
 
-.card-kpi span{
-    font-size:28px;
-    font-weight:bold;
+.btn-bi-upload:hover {
+  background: #1d4ed8;
+  transform: translateY(-1px);
 }
 
-.dashboard-grid{
-    display:grid;
-    grid-template-columns:3fr 1fr;
-    gap:20px;
+/* =========================
+   KPIS
+========================= */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 18px;
 }
 
-.panel-graficos{
-    display:grid;
-    gap:20px;
+.card-kpi {
+  background: #ffffff;
+  padding: 20px 22px;
+  border-radius: 18px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
-.grafico-card{
-    background:white;
-    padding:20px;
-    border-radius:12px;
+.card-kpi h3 {
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #64748b;
+  font-family: 'JetBrains Mono', monospace;
+  margin: 0;
 }
 
-.panel-filtros{
-    background:white;
-    padding:20px;
-    border-radius:12px;
+.card-kpi span {
+  font-size: 28px;
+  font-weight: 800;
+  font-family: 'JetBrains Mono', monospace;
+  color: #0f172a;
 }
 
-.panel-filtros select{
-    width:100%;
-    margin-bottom:15px;
-    padding:10px;
+/* =========================
+   DASHBOARD GRID
+========================= */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: 2.8fr 1fr;
+  gap: 20px;
 }
 
-#graficoPrincipal{
-    height:400px !important;
+.panel-graficos {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
 }
 
-#graficoTop{
-    height:300px !important;
+.grafico-card {
+  background: #ffffff;
+  padding: 22px 24px;
+  border-radius: 20px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
 }
 
-#graficoLinea{
-    height:300px !important;
+.grafico-card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 18px;
 }
 
-.tabla-card{
-    background:white;
-    margin-top:20px;
-    padding:20px;
-    border-radius:12px;
+.grafico-card h3 {
+  font-size: 15px;
+  font-weight: 700;
+  color: #0f172a;
+  margin: 0;
+}
+
+.configuracion-grafico {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.configuracion-grafico select,
+.panel-filtros select {
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1.5px solid #e2e8f0;
+  background: #f8fafc;
+  font-size: 12.5px;
+  font-family: inherit;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.configuracion-grafico select:focus,
+.panel-filtros select:focus {
+  border-color: #2563eb;
+  background: white;
+}
+
+.btn-bi-action {
+  background: #2563eb;
+  color: white;
+  border: none;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-bi-action:hover {
+  background: #1d4ed8;
+}
+
+.bi-chart-wrapper {
+  position: relative;
+  width: 100%;
+  height: 340px;
+}
+
+.graficos-secundarios-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+.bi-chart-wrapper-sm {
+  position: relative;
+  width: 100%;
+  height: 240px;
+  margin-top: 12px;
+}
+
+/* =========================
+   PANEL FILTROS
+========================= */
+.panel-filtros {
+  background: #ffffff;
+  padding: 24px;
+  border-radius: 20px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  height: fit-content;
+}
+
+.panel-filtros h3 {
+  font-size: 15px;
+  font-weight: 700;
+  margin: 0;
+}
+
+.filtro-campo {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.filtro-campo label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+
+.btn-bi-filter {
+  background: #16a34a;
+  color: white;
+  border: none;
+  height: 42px;
+  border-radius: 10px;
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  margin-top: 6px;
+  transition: background 0.2s;
+}
+
+.btn-bi-filter:hover {
+  background: #15803d;
+}
+
+.btn-bi-reset {
+  background: #f1f5f9;
+  color: #475569;
+  border: 1px solid #e2e8f0;
+  height: 38px;
+  border-radius: 10px;
+  font-weight: 600;
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-bi-reset:hover {
+  background: #e2e8f0;
+}
+
+/* =========================
+   TABLA DE DATOS
+========================= */
+.tabla-card {
+  background: #ffffff;
+  padding: 24px;
+  border-radius: 20px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04);
+}
+
+.tabla-card h3 {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0 0 16px 0;
+}
+
+.table-responsive {
+  overflow-x: auto;
+}
+
+@media (max-width: 1100px) {
+  .kpis { grid-template-columns: repeat(2, 1fr); }
+  .dashboard-grid { grid-template-columns: 1fr; }
+  .graficos-secundarios-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 768px) {
+  .bi-header { flex-direction: column; align-items: flex-start; gap: 14px; }
+  .kpis { grid-template-columns: 1fr; }
 }
