@@ -717,22 +717,41 @@
     notificar('Recepción eliminada correctamente', 'success');
   };
 
-  // 13. KPIs y Dashboard Resumen
+  // 13. KPIs y Dashboard Resumen (Cálculo Estrictamente Numérico)
   window.actualizarKPIsRecepcion = async function () {
     try {
       const { data: recs } = await window.supabaseClient.from('recepciones').select('*');
       const lista = recs || [];
 
-      if ($('kpiRecepciones')) $('kpiRecepciones').innerText = lista.length;
+      if ($('kpiRecepciones')) $('kpiRecepciones').innerText = lista.length.toLocaleString();
 
-      if (lista.length > 0) {
-        const ult = lista[0];
-        if ($('kpiRevisado')) $('kpiRevisado').innerText = `${ult.porcentaje_revisado || 0}%`;
-        if ($('kpiNovedades')) $('kpiNovedades').innerText = ult.novedades || 0;
-        if ($('kpiFaltantes')) $('kpiFaltantes').innerText = ult.faltantes || 0;
-      }
+      let totalFaltantes = 0;
+      let totalNovedades = 0;
+      let totalRevisadoSuma = 0;
+
+      lista.forEach(item => {
+        const numFalt = Number(item.faltantes) || (String(item.estado || item.novedad_original || '').toLowerCase().includes('faltante') ? 1 : 0);
+        const numNov = Number(item.novedades) || 0;
+        const estado = String(item.estado || item.novedad_original || '').toLowerCase();
+
+        totalFaltantes += numFalt;
+
+        if (numNov > 0) {
+          totalNovedades += numNov;
+        } else if (estado.includes('dañ') || estado.includes('dan') || estado.includes('falt') || estado.includes('sobr')) {
+          totalNovedades += 1;
+        }
+
+        totalRevisadoSuma += Number(item.porcentaje_revisado) || 0;
+      });
+
+      const avgRevisado = lista.length > 0 ? (totalRevisadoSuma / lista.length).toFixed(1) : '0.0';
+
+      if ($('kpiRevisado')) $('kpiRevisado').innerText = `${avgRevisado}%`;
+      if ($('kpiNovedades')) $('kpiNovedades').innerText = totalNovedades.toLocaleString();
+      if ($('kpiFaltantes')) $('kpiFaltantes').innerText = totalFaltantes.toLocaleString();
     } catch (e) {
-      console.error(e);
+      console.error('Error en actualizarKPIsRecepcion:', e);
     }
   };
 
@@ -745,29 +764,35 @@
       const meses = {};
 
       (recs || []).forEach(item => {
-        const mes = new Date(item.created_at).toLocaleString('es-CO', { month: 'long' });
+        const fecha = item.created_at ? new Date(item.created_at) : new Date();
+        const mes = fecha.toLocaleString('es-CO', { month: 'long' });
         if (!meses[mes]) meses[mes] = { recs: 0, falt: 0, sobr: 0, dan: 0, tot: 0 };
 
-        meses[mes].recs++;
-        const nov = String(item.novedad_original || item.estado || '').toLowerCase();
-        if (nov.includes('faltante')) meses[mes].falt++;
-        if (nov.includes('sobrante')) meses[mes].sobr++;
-        if (nov.includes('dañ') || nov.includes('dan')) meses[mes].dan++;
-        if (nov.includes('falt') || nov.includes('sobr') || nov.includes('dañ') || nov.includes('dan')) meses[mes].tot++;
+        meses[mes].recs += 1;
+
+        const numFalt = Number(item.faltantes) || (String(item.estado || item.novedad_original || '').toLowerCase().includes('faltante') ? 1 : 0);
+        const numNov = Number(item.novedades) || 0;
+        const estado = String(item.estado || item.novedad_original || '').toLowerCase();
+
+        meses[mes].falt += numFalt;
+        if (estado.includes('sobrante')) meses[mes].sobr += 1;
+        if (estado.includes('dañ') || estado.includes('dan')) meses[mes].dan += (numNov > 0 ? numNov : 1);
+
+        meses[mes].tot = meses[mes].falt + meses[mes].sobr + meses[mes].dan;
       });
 
       body.innerHTML = Object.keys(meses).map(m => `
         <tr>
           <td><strong>${m.toUpperCase()}</strong></td>
           <td>${meses[m].recs}</td>
-          <td>${meses[m].falt}</td>
-          <td>${meses[m].sobr}</td>
-          <td>${meses[m].dan}</td>
+          <td><span class="badge-faltante-txt">${meses[m].falt}</span></td>
+          <td><span class="badge-sobrante-txt">${meses[m].sobr}</span></td>
+          <td><span class="badge-danado-txt">${meses[m].dan}</span></td>
           <td><strong>${meses[m].tot}</strong></td>
         </tr>
       `).join('');
     } catch (e) {
-      console.error(e);
+      console.error('Error en actualizarDashboardRecepcion:', e);
     }
   };
 

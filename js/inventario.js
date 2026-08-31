@@ -37,6 +37,13 @@
       .replace(/'/g, '&#039;');
   }
 
+  function extraerStock(item) {
+    if (!item) return 0;
+    const val = item.stock ?? item.cantidad ?? item.stock_sistema ?? item.saldo ?? item.cantidad_teorica ?? item.Stock ?? item.STOCK ?? item.Cantidad ?? item.CANTIDAD ?? 0;
+    const num = Number(val);
+    return isNaN(num) ? 0 : num;
+  }
+
   function notificar(mensaje, tipo = 'warning', titulo = 'Inventario') {
     if (typeof window.mostrarNotificacion === 'function') {
       window.mostrarNotificacion(titulo, mensaje, tipo);
@@ -117,16 +124,16 @@
           }
 
           const normalizados = json.map(item => {
-            const codigo = String(item.Codigo || item.CODIGO || item.codigo || item.Referencia || item.REFERENCIA || '').trim();
-            const producto = String(item.Producto || item.PRODUCTO || item.producto || item.Descripcion || item.DESCRIPCION || item.Material || '').trim();
-            const ubicacion = String(item.Ubicacion || item.UBICACION || item.ubicacion || item.Bodega || 'Principal').trim();
-            const stock = Number(item.Stock || item.STOCK || item.stock || item.Cantidad || item.CANTIDAD || 0);
+            const codigo = String(item.Codigo || item.CODIGO || item.codigo || item.Referencia || item.REFERENCIA || item.Item || item.ITEM || '').trim();
+            const producto = String(item.Producto || item.PRODUCTO || item.producto || item.Descripcion || item.DESCRIPCION || item.Material || item.MATERIAL || '').trim();
+            const ubicacion = String(item.Ubicacion || item.UBICACION || item.ubicacion || item.Bodega || item.BODEGA || 'Principal').trim();
+            const stock = extraerStock(item);
 
             return {
               codigo,
               producto: producto || codigo,
               ubicacion,
-              stock_sistema: isNaN(stock) ? 0 : stock,
+              stock_sistema: stock,
               conteo_fisico: null,
               diferencia: null,
               estado: 'Pendiente',
@@ -140,7 +147,6 @@
           }
 
           if (window.supabaseClient) {
-            // Guardar por lotes en Supabase
             const LOTE = 200;
             for (let i = 0; i < normalizados.length; i += LOTE) {
               const chunk = normalizados.slice(i, i + LOTE);
@@ -152,7 +158,7 @@
           localStorage.setItem('inventario', JSON.stringify(normalizados));
 
           if (typeof window.guardarHistorial === 'function') {
-            await window.guardarHistorial('CARGA_EXCEL', 'INVENTARIO', `Carga de archivo Excel con ${normalizados.length} ítems`);
+            await window.guardarHistorial('CARGA_EXCEL', 'INVENTARIO', `Carga de archivo Excel con ${normalizados.length} productos`);
           }
 
           if (typeof window.crearNotificacion === 'function') {
@@ -198,18 +204,22 @@
       return;
     }
 
-    window.productoActual = prod;
+    const stockTeorico = extraerStock(prod);
+    window.productoActual = { ...prod, stock_sistema: stockTeorico };
+
     $('codigoProducto').innerText = prod.codigo;
-    $('nombreProducto').innerText = prod.producto;
+    $('nombreProducto').innerText = prod.producto || '-';
     $('ubicacionProducto').innerText = prod.ubicacion || 'General';
-    $('stockProducto').innerText = prod.stock_sistema ?? 0;
+    $('stockProducto').innerText = stockTeorico;
 
     const fisico = getVal('conteoFisico').trim();
     if (fisico !== '') {
-      const diff = Number(fisico) - Number(prod.stock_sistema || 0);
+      const diff = Number(fisico) - stockTeorico;
       $('resultadoTexto').innerText = diff > 0 ? `+${diff} (Sobrante)` : diff < 0 ? `${diff} (Faltante)` : '0 (Exacto)';
+      $('resultadoTexto').style.color = diff === 0 ? '#10b981' : diff < 0 ? '#ef4444' : '#f59e0b';
     } else {
       $('resultadoTexto').innerText = 'Esperando conteo...';
+      $('resultadoTexto').style.color = '#64748b';
     }
 
     $('conteoFisico').focus();
@@ -228,12 +238,13 @@
     }
 
     const conteoFisico = Number(valorFisico);
-    const stockSistema = Number(window.productoActual.stock_sistema || 0);
+    const stockSistema = extraerStock(window.productoActual);
     const diferencia = conteoFisico - stockSistema;
     const estado = diferencia === 0 ? 'Exacto' : diferencia < 0 ? 'Faltante' : 'Sobrante';
 
     const itemActualizado = {
       ...window.productoActual,
+      stock_sistema: stockSistema,
       conteo_fisico: conteoFisico,
       diferencia: diferencia,
       estado: estado,
@@ -258,7 +269,7 @@
       fecha: new Date().toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })
     });
 
-    // Persistir en Supabase si está disponible
+    // Persistir en Supabase
     if (window.supabaseClient) {
       try {
         await window.supabaseClient
@@ -275,7 +286,6 @@
       }
     }
 
-    // Feedback visual
     $('resultadoTexto').innerText = diferencia > 0 ? `+${diferencia} (Sobrante)` : diferencia < 0 ? `${diferencia} (Faltante)` : '0 (Exacto)';
     $('resultadoTexto').style.color = diferencia === 0 ? '#10b981' : diferencia < 0 ? '#ef4444' : '#f59e0b';
 
@@ -287,7 +297,7 @@
     window.renderHistorial();
     window.renderInventario();
     window.actualizarKPIs();
-    notificar(`Conteo guardado para "${itemActualizado.codigo}": ${estado} (${diferencia})`, 'success');
+    notificar(`Conteo registrado para "${itemActualizado.codigo}": ${estado} (${diferencia})`, 'success');
   }
 
   // ==================================================================
@@ -297,7 +307,7 @@
     if (window.productoActual) {
       setVal('novedadCodigo', window.productoActual.codigo);
       setVal('novedadMaterial', window.productoActual.producto);
-      setVal('novedadSistema', window.productoActual.stock_sistema || 0);
+      setVal('novedadSistema', extraerStock(window.productoActual));
       setVal('novedadFisico', getVal('conteoFisico') || 0);
       window.calcularDiferenciaNovedad();
     } else {
@@ -401,7 +411,7 @@
             <button type="button" class="btn-mini" onclick="window.verObsNovedad('${encodeURIComponent(item.observacion || '')}')">👁️</button>
           </td>
           <td>
-            <button type="button" class="btn-mini" onclick="window.eliminarNovedad(${item.id})">🗑️</button>
+            <button type="button" class="btn-mini btn-eliminar-mini" onclick="window.eliminarNovedad(${item.id})">🗑️</button>
           </td>
         </tr>
       `).join('');
@@ -433,7 +443,7 @@
   };
 
   // ==================================================================
-  // 5. RENDERIZADO DE TABLAS Y KPIS
+  // 5. RENDERIZADO DE TABLAS Y KPIS (TOLERANTE A SCHEMAS)
   // ==================================================================
   window.renderInventario = function (datos = null) {
     const body = $('inventarioBody');
@@ -446,25 +456,28 @@
       return;
     }
 
-    // Paginación visual rápida (primeros 100 si no hay filtro)
-    const mostrar = lista.slice(0, 150);
+    const mostrar = lista.slice(0, 200);
 
-    body.innerHTML = mostrar.map(item => `
-      <tr>
-        <td><strong>${sanitize(item.codigo)}</strong></td>
-        <td>${sanitize(item.producto)}</td>
-        <td>${sanitize(item.ubicacion || 'General')}</td>
-        <td><strong>${item.stock_sistema}</strong></td>
-        <td>
-          <button type="button" class="btn-mini" onclick="window.seleccionarParaConteo('${item.codigo}')" title="Contar">✏️ Contar</button>
-        </td>
-      </tr>
-    `).join('');
+    body.innerHTML = mostrar.map(item => {
+      const stockValor = extraerStock(item);
+
+      return `
+        <tr>
+          <td><strong>${sanitize(item.codigo)}</strong></td>
+          <td>${sanitize(item.producto || item.descripcion || item.material || item.codigo)}</td>
+          <td>${sanitize(item.ubicacion || item.bodega || 'Principal')}</td>
+          <td><strong>${stockValor}</strong></td>
+          <td style="text-align: right;">
+            <button type="button" class="btn-mini btn-inv-count-row" onclick="window.seleccionarParaConteo('${sanitize(item.codigo)}')" title="Contar este producto">✏️ Contar</button>
+          </td>
+        </tr>`;
+    }).join('');
   };
 
   window.seleccionarParaConteo = function (codigo) {
     setVal('codigoInput', codigo);
     buscarProducto();
+    window.scrollTo({ top: 150, behavior: 'smooth' });
   };
 
   window.renderHistorial = function () {
@@ -476,16 +489,22 @@
       return;
     }
 
-    body.innerHTML = window.historialConteos.map(item => `
-      <tr>
-        <td><strong>${sanitize(item.codigo)}</strong></td>
-        <td>${sanitize(item.producto)}</td>
-        <td>${item.sistema}</td>
-        <td>${item.fisico}</td>
-        <td><strong style="color:${item.diferencia === 0 ? '#10b981' : item.diferencia < 0 ? '#ef4444' : '#f59e0b'}">${item.diferencia > 0 ? '+' + item.diferencia : item.diferencia}</strong></td>
-        <td><span class="badge-${item.estado.toLowerCase()}">${item.estado}</span></td>
-      </tr>
-    `).join('');
+    body.innerHTML = window.historialConteos.map(item => {
+      const diff = Number(item.diferencia) || 0;
+      const diffTxt = diff > 0 ? `+${diff}` : `${diff}`;
+      const color = diff === 0 ? '#10b981' : diff < 0 ? '#ef4444' : '#f59e0b';
+      const badgeClass = diff === 0 ? 'estado-revisado' : diff < 0 ? 'estado-cerrado' : 'estado-revision';
+
+      return `
+        <tr>
+          <td><strong>${sanitize(item.codigo)}</strong></td>
+          <td>${sanitize(item.producto)}</td>
+          <td>${item.sistema}</td>
+          <td><strong>${item.fisico ?? '-'}</strong></td>
+          <td><strong style="color:${color}">${diffTxt}</strong></td>
+          <td><span class="${badgeClass}">${item.estado}</span></td>
+        </tr>`;
+    }).join('');
   };
 
   window.actualizarKPIs = function () {
@@ -496,19 +515,20 @@
 
     window.inventarioCache.forEach(item => {
       if (item.conteo_fisico !== null && item.conteo_fisico !== undefined) {
-        if (item.diferencia === 0) exactos++;
-        else if (item.diferencia < 0) faltantes++;
-        else if (item.diferencia > 0) sobrantes++;
+        const diff = Number(item.diferencia);
+        if (diff === 0) exactos++;
+        else if (diff < 0) faltantes++;
+        else if (diff > 0) sobrantes++;
       }
     });
 
     const contados = exactos + faltantes + sobrantes;
     const exactitud = contados > 0 ? ((exactos / contados) * 100).toFixed(1) : '0.0';
 
-    if ($('kpiTotal')) $('kpiTotal').innerText = total;
-    if ($('kpiExactos')) $('kpiExactos').innerText = exactos;
-    if ($('kpiFaltantes')) $('kpiFaltantes').innerText = faltantes;
-    if ($('kpiSobrantes')) $('kpiSobrantes').innerText = sobrantes;
+    if ($('kpiTotal')) $('kpiTotal').innerText = total.toLocaleString();
+    if ($('kpiExactos')) $('kpiExactos').innerText = exactos.toLocaleString();
+    if ($('kpiFaltantes')) $('kpiFaltantes').innerText = faltantes.toLocaleString();
+    if ($('kpiSobrantes')) $('kpiSobrantes').innerText = sobrantes.toLocaleString();
     if ($('kpiExactitud')) $('kpiExactitud').innerText = `${exactitud}%`;
   };
 
@@ -523,9 +543,9 @@
 
     const exportData = window.inventarioCache.map(i => ({
       'Código': i.codigo,
-      'Producto': i.producto,
-      'Ubicación': i.ubicacion || 'General',
-      'Stock Sistema': i.stock_sistema,
+      'Producto': i.producto || i.descripcion || '',
+      'Ubicación': i.ubicacion || 'Principal',
+      'Stock Sistema': extraerStock(i),
       'Conteo Físico': i.conteo_fisico ?? '',
       'Diferencia': i.diferencia ?? '',
       'Estado': i.estado || 'Pendiente'
@@ -577,7 +597,7 @@
       }
       const filtrados = window.inventarioCache.filter(p =>
         String(p.codigo || '').toLowerCase().includes(q) ||
-        String(p.producto || '').toLowerCase().includes(q) ||
+        String(p.producto || p.descripcion || '').toLowerCase().includes(q) ||
         String(p.ubicacion || '').toLowerCase().includes(q)
       );
       window.renderInventario(filtrados);

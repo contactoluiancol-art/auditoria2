@@ -28,11 +28,16 @@
   }
 
   // ==================================================================
-  // 1. CARGA DE EXCEL
+  // 1. CARGA DE EXCEL & DRAG AND DROP
   // ==================================================================
-  function leerExcel(e) {
-    const file = e.target.files[0];
+  function procesarArchivoExcel(file) {
     if (!file) return;
+
+    const statusEl = $('biFileStatus');
+    if (statusEl) {
+      statusEl.innerText = `Cargando: ${file.name}...`;
+      statusEl.classList.remove('loaded');
+    }
 
     const reader = new FileReader();
     reader.onload = function (evt) {
@@ -44,22 +49,29 @@
         const json = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
 
         if (!json || json.length === 0) {
-          notificar('El archivo no contiene registros o filas legibles.');
+          notificar('El archivo no contiene registros legibles.');
+          if (statusEl) statusEl.innerText = 'Archivo vacío';
           return;
         }
 
         datosExcelOriginales = json;
         datosExcelFiltrados = [...json];
 
+        if (statusEl) {
+          statusEl.innerText = `✓ ${file.name} (${json.length} filas)`;
+          statusEl.classList.add('loaded');
+        }
+
         configurarSelectores(json);
         generarDashboardCompleto();
         renderizarTablaBI(json);
 
-        notificar(`Se cargaron ${json.length} filas para análisis BI.`, 'success');
+        notificar(`Se procesaron ${json.length} registros con éxito.`, 'success');
 
       } catch (err) {
         console.error('Error leyendo Excel en BI:', err);
         notificar('Error al procesar el archivo Excel.', 'error');
+        if (statusEl) statusEl.innerText = 'Error al cargar';
       }
     };
 
@@ -85,12 +97,11 @@
     selDim.innerHTML = '';
     selMet.innerHTML = '';
 
-    // Determinar columnas numéricas vs texto
     const metricasCandidatas = [];
     const dimensionesCandidatas = [];
 
     columnas.forEach(col => {
-      const valoresMuestra = datos.slice(0, 30).map(d => d[col]);
+      const valoresMuestra = datos.slice(0, 40).map(d => d[col]);
       const esNumerica = valoresMuestra.some(v => v !== '' && !isNaN(Number(v)));
 
       if (esNumerica) metricasCandidatas.push(col);
@@ -104,7 +115,6 @@
       selMet.value = metricasCandidatas[0];
     }
 
-    // Configurar filtros dinámicos con las dos primeras dimensiones
     if (dimensionesCandidatas.length >= 1 && selF1 && lblF1) {
       const col1 = dimensionesCandidatas[0];
       lblF1.textContent = col1;
@@ -118,7 +128,7 @@
   }
 
   function poblarValoresFiltro(selectElement, columna, datos) {
-    const unicos = [...new Set(datos.map(d => String(d[columna] || '').trim()).filter(Boolean))].slice(0, 50);
+    const unicos = [...new Set(datos.map(d => String(d[columna] || '').trim()).filter(Boolean))].slice(0, 60);
     selectElement.innerHTML = `<option value="">(Todos)</option>` + unicos.map(v => `<option value="${v}">${v}</option>`).join('');
   }
 
@@ -134,7 +144,6 @@
 
     if (!dim || !met) return;
 
-    // Agrupar datos por dimensión
     const acumulador = {};
     let totalMetrica = 0;
     let maxValor = -Infinity;
@@ -153,22 +162,18 @@
     const valores = Object.values(acumulador);
     const promedio = contadorRegistros > 0 ? (totalMetrica / contadorRegistros) : 0;
 
-    // Actualizar KPIs
     if ($('kpiRegistros')) $('kpiRegistros').innerText = contadorRegistros.toLocaleString();
     if ($('kpiTotal')) $('kpiTotal').innerText = totalMetrica.toLocaleString();
     if ($('kpiPromedio')) $('kpiPromedio').innerText = promedio.toLocaleString('es-CO', { maximumFractionDigits: 1 });
     if ($('kpiMaximo')) $('kpiMaximo').innerText = (maxValor === -Infinity ? 0 : maxValor).toLocaleString();
 
-    // 1. Gráfico Principal
     crearGraficoPrincipal(etiquetas, valores, met, tipo);
 
-    // 2. Gráfico Top 10
     const pares = etiquetas.map((e, idx) => ({ etiqueta: e, valor: valores[idx] }));
     pares.sort((a, b) => b.valor - a.valor);
     const top10 = pares.slice(0, 10);
     crearGraficoTop(top10.map(t => t.etiqueta), top10.map(t => t.valor), met);
 
-    // 3. Gráfico de Tendencia
     crearGraficoLinea(etiquetas.slice(0, 20), valores.slice(0, 20), met);
   }
 
@@ -177,7 +182,7 @@
     if (!canvas || !window.Chart) return;
     if (chartPrincipal) chartPrincipal.destroy();
 
-    const colores = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#f97316'];
+    const colores = ['#2563eb', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#ec4899', '#f97316', '#14b8a6', '#6366f1'];
 
     chartPrincipal = new window.Chart(canvas, {
       type: type,
@@ -186,7 +191,7 @@
         datasets: [{
           label: labelName,
           data: data,
-          backgroundColor: type === 'line' ? 'rgba(37, 99, 235, 0.15)' : colores,
+          backgroundColor: type === 'line' ? 'rgba(37, 99, 235, 0.12)' : colores,
           borderColor: '#2563eb',
           borderWidth: 2,
           fill: type === 'line',
@@ -197,7 +202,11 @@
         responsive: true,
         maintainAspectRatio: false,
         plugins: {
-          legend: { display: ['pie', 'doughnut'].includes(type), position: 'bottom' }
+          legend: { display: ['pie', 'doughnut'].includes(type), position: 'bottom', labels: { font: { family: 'Poppins', size: 11.5 } } }
+        },
+        scales: ['pie', 'doughnut'].includes(type) ? {} : {
+          y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { family: 'JetBrains Mono', size: 11 } } },
+          x: { grid: { display: false }, ticks: { font: { family: 'Poppins', size: 11 } } }
         }
       }
     });
@@ -216,14 +225,19 @@
           label: `Top ${labelName}`,
           data: data,
           backgroundColor: '#10b981',
-          borderRadius: 6
+          borderRadius: 6,
+          barThickness: 16
         }]
       },
       options: {
         indexAxis: 'y',
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { display: false } }
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { family: 'JetBrains Mono', size: 10.5 } } },
+          y: { grid: { display: false }, ticks: { font: { family: 'Poppins', size: 11 } } }
+        }
       }
     });
   }
@@ -242,6 +256,8 @@
           data: data,
           borderColor: '#f59e0b',
           backgroundColor: 'rgba(245, 158, 11, 0.1)',
+          pointBackgroundColor: '#f59e0b',
+          pointRadius: 4,
           fill: true,
           tension: 0.35
         }]
@@ -249,7 +265,11 @@
       options: {
         responsive: true,
         maintainAspectRatio: false,
-        plugins: { legend: { display: false } }
+        plugins: { legend: { display: false } },
+        scales: {
+          y: { beginAtZero: true, grid: { color: '#f1f5f9' }, ticks: { font: { family: 'JetBrains Mono', size: 10.5 } } },
+          x: { grid: { color: '#f1f5f9' }, ticks: { font: { family: 'Poppins', size: 10.5 } } }
+        }
       }
     });
   }
@@ -264,17 +284,17 @@
     const val2 = $('filtroColumna2')?.value;
 
     datosExcelFiltrados = datosExcelOriginales.filter(row => {
-      let cumple1 = true;
-      let cumple2 = true;
+      let c1 = true;
+      let c2 = true;
 
       if (val1 && col1) {
-        cumple1 = String(row[col1] || '').trim() === val1;
+        c1 = String(row[col1] || '').trim() === val1;
       }
       if (val2 && col2) {
-        cumple2 = String(row[col2] || '').trim() === val2;
+        c2 = String(row[col2] || '').trim() === val2;
       }
 
-      return cumple1 && cumple2;
+      return c1 && c2;
     });
 
     generarDashboardCompleto();
@@ -313,7 +333,7 @@
         destroy: true,
         language: {
           search: "Buscar:",
-          lengthMenu: "Mostrar _MENU_ filas",
+          lengthMenu: "Mostrar _MENU_ registros",
           info: "Mostrando _START_ a _END_ de _TOTAL_ registros",
           paginate: { first: "«", previous: "‹", next: "›", last: "»" },
           emptyTable: "Sin datos disponibles"
@@ -323,13 +343,38 @@
   }
 
   // ==================================================================
-  // 6. EVENTOS
+  // 6. EVENTOS DELEGADOS Y DRAG & DROP
   // ==================================================================
   document.addEventListener('change', function (e) {
     if (e.target && e.target.id === 'excelBI') {
-      leerExcel(e);
+      procesarArchivoExcel(e.target.files[0]);
     }
   });
+
+  const dropZone = $('biDropZone');
+  if (dropZone) {
+    dropZone.addEventListener('click', () => {
+      const fi = $('excelBI');
+      if (fi) fi.click();
+    });
+
+    dropZone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropZone.classList.add('drag-over');
+    });
+
+    dropZone.addEventListener('dragleave', () => {
+      dropZone.classList.remove('drag-over');
+    });
+
+    dropZone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropZone.classList.remove('drag-over');
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        procesarArchivoExcel(e.dataTransfer.files[0]);
+      }
+    });
+  }
 
   document.addEventListener('click', function (e) {
     if (e.target && e.target.id === 'btnGenerar') {
