@@ -13,7 +13,7 @@ Plataforma integral para el control de inventarios, recepción de mercancías, a
    - Verifica la creación de los buckets de Storage: `recepciones-pdf` y `auditorias`.
 
 2. **Configuración del Cliente:**
-   - Edita `js/supabaseClient.js` con la URL y Anon Key correspondientes a tu instancia de producción:
+   - Edita `js/supabaseClient.js` con la URL y Anon Key correspondientes a tu instancia de producción: 
    ```javascript
    window.supabaseClient = window.supabase.createClient(
      'https://TU_PROYECTO.supabase.co',
