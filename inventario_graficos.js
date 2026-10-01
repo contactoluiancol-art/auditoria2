@@ -13,7 +13,7 @@
   function actualizarTexto(id, valor) {
     const el = document.getElementById(id);
     if (el) el.innerText = valor;
-  }
+  } 
 
   // ==================================================================
   // 1. CARGA DE INVENTARIO DESDE SUPABASE
